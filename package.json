@@ -1,0 +1,71 @@
+{
+  "name": "gxaj-knowledge-base",
+  "version": "1.0.0",
+  "description": "gxaj知识库 - 基于MiniMax风格的智能问答系统",
+  "main": "main.js",
+  "scripts": {
+    "start": "node proxy.js",
+    "dev": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.gxaj.knowledgebase",
+    "productName": "gxaj知识库",
+    "copyright": "Copyright © 2026 gxaj",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js",
+      "proxy.js",
+      "js/**/*",
+      "css/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "gxaj知识库",
+      "deleteAppDataOnInstaller": false,
+      "runAfterFinish": true,
+      "license": null
+    },
+    "publish": null
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jszip": "^3.10.1",
+    "xmldom": "^0.6.0"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  }
+}

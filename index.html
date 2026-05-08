@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gxaj知识库 - 智能问答系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- ========== 登录页面 ========== -->
+  <div id="loginContainer" class="login-container">
+    <div class="login-box">
+      <div class="login-logo">
+        <div class="logo-icon">📚</div>
+        <h1>gxaj知识库</h1>
+        <p>智能问答系统</p>
+      </div>
+      
+      <form id="loginForm" class="login-form">
+        <div id="loginError" class="login-error"></div>
+        
+        <div class="form-group">
+          <label for="loginUsername">用户名</label>
+          <input 
+            type="text" 
+            id="loginUsername" 
+            placeholder="请输入用户名"
+            autocomplete="username"
+          >
+        </div>
+        
+        <div class="form-group">
+          <label for="loginPassword">密码</label>
+          <input 
+            type="password" 
+            id="loginPassword" 
+            placeholder="请输入密码"
+            autocomplete="current-password"
+          >
+        </div>
+        
+        <button type="submit" id="loginBtn" class="login-btn">
+          登录
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========== 主应用 ========== -->
+  <div id="appContainer" class="app-container">
+    <!-- 侧边栏 -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <div class="logo-icon">📚</div>
+          <div class="logo-text">
+            <span class="name">gxaj知识库</span>
+            <span class="role">智能问答系统</span>
+          </div>
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">功能</div>
+          <div class="nav-item active" id="newChatBtn">
+            <span class="icon">✨</span>
+            <span>新建对话</span>
+          </div>
+          <div class="nav-item" id="knowledgeBtn">
+            <span class="icon">📚</span>
+            <span>知识库管理</span>
+          </div>
+        </div>
+        
+        <div class="nav-section">
+          <div class="nav-section-title">对话历史</div>
+          <div id="conversationHistory" class="conversation-history">
+            <div class="history-empty">
+              <span>暂无历史对话</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="nav-section">
+          <div class="nav-section-title">说明</div>
+          <div class="nav-item" onclick="alert('📖 使用说明：\n\n1. 先上传知识库文档（管理员）\n2. 然后开始对话提问\n3. 系统会基于知识库内容回答\n4. 对话会自动保存到历史记录')">
+            <span class="icon">❓</span>
+            <span>使用帮助</span>
+          </div>
+        </div>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar">U</div>
+          <div class="user-details">
+            <div class="name" id="userName">用户</div>
+            <div class="role" id="userRole">用户</div>
+          </div>
+        </div>
+        <button class="logout-btn" id="logoutBtn">
+          <span>🚪</span>
+          <span>退出登录</span>
+        </button>
+      </div>
+    </aside>
+    
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <!-- 顶部栏 -->
+      <header class="chat-header">
+        <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+        <h2>💬 智能问答</h2>
+        <div class="header-actions">
+          <div id="connectionStatus" class="connection-status">
+            <span class="status-dot"></span>
+            <span class="status-text">检查连接...</span>
+          </div>
+          <button class="btn btn-secondary" id="clearKnowledgeBtn">
+            🗑️ 清空知识库
+          </button>
+        </div>
+      </header>
+      
+      <!-- 聊天区域 -->
+      <div id="chatArea" class="chat-area">
+        <!-- 欢迎区域 -->
+        <div id="welcomeArea" class="chat-welcome">
+          <div class="welcome-icon">🤖</div>
+          <h3>欢迎使用 gxaj知识库</h3>
+          <p>
+            我是基于知识库的智能问答助手。<br>
+            请先上传知识库文档，然后开始提问。
+          </p>
+          <div class="quick-actions">
+            <div class="quick-action admin-only" onclick="openKnowledgePanel()">
+              📤 上传知识库文档
+            </div>
+            <div class="quick-action" onclick="elements.messageInput.focus(); elements.messageInput.value='有哪些上传文档的方法？';">
+              ❓ 如何使用？
+            </div>
+          </div>
+        </div>
+        
+        <!-- 消息列表 -->
+        <div id="messageList" class="message-list"></div>
+      </div>
+      
+      <!-- 输入区域 -->
+      <div id="inputArea" class="input-area">
+        <div class="input-container">
+          <div class="input-wrapper">
+            <textarea 
+              id="messageInput" 
+              placeholder="输入问题，按 Enter 发送..."
+              rows="1"
+            ></textarea>
+            <div class="input-actions">
+              <button id="sendBtn" class="send-btn" title="发送">
+                ➤
+              </button>
+            </div>
+          </div>
+          <div class="input-hint">
+            💡 提示：请先上传知识库文档，系统将基于文档内容回答
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ========== 知识库管理面板 ========== -->
+  <div id="knowledgePanel" class="panel-overlay">
+    <div class="panel">
+      <div class="panel-header">
+        <h3>📚 知识库管理</h3>
+        <button id="closeKnowledgePanel" class="panel-close">✕</button>
+      </div>
+      
+      <div class="panel-body">
+        <!-- 上传区域 -->
+        <div id="uploadZone" class="upload-zone">
+          <div class="upload-icon">📤</div>
+          <h4>点击或拖拽上传文件</h4>
+          <p>支持 .docx 和 .md 格式</p>
+          <input type="file" id="fileInput" accept=".docx,.md,.markdown" multiple>
+        </div>
+        
+        <!-- 文件列表 -->
+        <div id="fileList" class="file-list">
+          <div style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+            <p>📂 暂无知识库文档</p>
+            <p style="margin-top: 8px; font-size: 13px;">点击上方区域或拖拽文件上传</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 加载遮罩 ========== -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <div id="loadingText" class="loading-text">加载中...</div>
+    </div>
+  </div>
+
+  <!-- ========== Toast 容器 ========== -->
+  <div id="toastContainer" class="toast-container"></div>
+  
+  <!-- ========== 移动端侧边栏遮罩 ========== -->
+  <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <!-- 脚本 -->
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/parser.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# 不打入安装包的文件
+test-screenshots/
+test-word-parse.js
+*.md
+build/README.md
+.npmignore
+dist/
