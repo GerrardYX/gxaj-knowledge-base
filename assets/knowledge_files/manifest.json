@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "description": "知识库文件清单 - 应用启动时会自动解析这些文件",
+  "instructions": "要添加/更新知识库，只需替换下面的文件，然后运行 npm run pack-kb",
+  "files": [
+    "测试文档1.txt",
+    "测试文档2.txt"
+  ]
+}

@@ -20,12 +20,23 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
+      - name: Cache GGUF model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: vendor/models
+          key: model-${{ hashFiles('scripts/download-bundles.js') }}
+          restore-keys: |
+            model-
+
       - name: Install dependencies
         run: npm ci
 
+      - name: Download GGUF model (if not cached)
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: node scripts/download-bundles.js --platform windows --arch amd64
+
       - name: Build Windows installer
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build:win
 
       - name: Upload installer artifact

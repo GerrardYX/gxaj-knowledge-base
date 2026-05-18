@@ -7,52 +7,13 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <!-- ========== 登录页面 ========== -->
-  <div id="loginContainer" class="login-container">
-    <div class="login-box">
-      <div class="login-logo">
-        <div class="logo-icon">📚</div>
-        <h1>gxaj知识库</h1>
-        <p>智能问答系统</p>
-      </div>
-      
-      <form id="loginForm" class="login-form">
-        <div id="loginError" class="login-error"></div>
-        
-        <div class="form-group">
-          <label for="loginUsername">用户名</label>
-          <input 
-            type="text" 
-            id="loginUsername" 
-            placeholder="请输入用户名"
-            autocomplete="username"
-          >
-        </div>
-        
-        <div class="form-group">
-          <label for="loginPassword">密码</label>
-          <input 
-            type="password" 
-            id="loginPassword" 
-            placeholder="请输入密码"
-            autocomplete="current-password"
-          >
-        </div>
-        
-        <button type="submit" id="loginBtn" class="login-btn">
-          登录
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ========== 主应用 ========== -->
-  <div id="appContainer" class="app-container">
+  <!-- ========== 主应用（直接显示，无需登录） ========== -->
+  <div id="appContainer" class="app-container active">
     <!-- 侧边栏 -->
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">
-          <div class="logo-icon">📚</div>
+          <img src="build/logo_marvel.png" alt="gxaj" class="logo-icon marvel-logo">
           <div class="logo-text">
             <span class="name">gxaj知识库</span>
             <span class="role">智能问答系统</span>
@@ -84,7 +45,7 @@
         
         <div class="nav-section">
           <div class="nav-section-title">说明</div>
-          <div class="nav-item" onclick="alert('📖 使用说明：\n\n1. 先上传知识库文档（管理员）\n2. 然后开始对话提问\n3. 系统会基于知识库内容回答\n4. 对话会自动保存到历史记录')">
+          <div class="nav-item" onclick="alert('📖 使用说明：\n\n1. 点击左侧「📚 知识库管理」上传文档\n2. 支持 Word (.docx) 和 Markdown (.md) 格式\n3. 上传完成后，在底部输入问题\n4. 系统会基于知识库内容回答\n5. 对话会自动保存到历史记录')">
             <span class="icon">❓</span>
             <span>使用帮助</span>
           </div>
@@ -92,17 +53,9 @@
       </nav>
       
       <div class="sidebar-footer">
-        <div class="user-info">
-          <div class="user-avatar" id="userAvatar">U</div>
-          <div class="user-details">
-            <div class="name" id="userName">用户</div>
-            <div class="role" id="userRole">用户</div>
-          </div>
+        <div class="app-info">
+          <div class="app-version">v1.0.0</div>
         </div>
-        <button class="logout-btn" id="logoutBtn">
-          <span>🚪</span>
-          <span>退出登录</span>
-        </button>
       </div>
     </aside>
     
@@ -113,6 +66,7 @@
         <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
         <h2>💬 智能问答</h2>
         <div class="header-actions">
+          <button class="theme-toggle" id="themeToggle" title="切换主题">🌙</button>
           <div id="connectionStatus" class="connection-status">
             <span class="status-dot"></span>
             <span class="status-text">检查连接...</span>
@@ -134,7 +88,7 @@
             请先上传知识库文档，然后开始提问。
           </p>
           <div class="quick-actions">
-            <div class="quick-action admin-only" onclick="openKnowledgePanel()">
+            <div class="quick-action" onclick="openKnowledgePanel()">
               📤 上传知识库文档
             </div>
             <div class="quick-action" onclick="elements.messageInput.focus(); elements.messageInput.value='有哪些上传文档的方法？';">
@@ -173,10 +127,13 @@
   <!-- ========== 知识库管理面板 ========== -->
   <div id="knowledgePanel" class="panel-overlay">
     <div class="panel">
-      <div class="panel-header">
-        <h3>📚 知识库管理</h3>
-        <button id="closeKnowledgePanel" class="panel-close">✕</button>
-      </div>
+        <div class="panel-header">
+          <h3>📚 知识库管理</h3>
+          <div class="panel-header-actions">
+            <button class="btn btn-secondary" id="exportKnowledgeBtn" title="导出知识库（含向量数据）" style="font-size: 12px; padding: 6px 12px;">📦 导出</button>
+            <button class="panel-close" id="closeKnowledgePanel">✕</button>
+          </div>
+        </div>
       
       <div class="panel-body">
         <!-- 上传区域 -->
@@ -184,7 +141,7 @@
           <div class="upload-icon">📤</div>
           <h4>点击或拖拽上传文件</h4>
           <p>支持 .docx 和 .md 格式</p>
-          <input type="file" id="fileInput" accept=".docx,.md,.markdown" multiple>
+          <input type="file" id="fileInput" accept=".docx,.md,.markdown" multiple style="display: none;">
         </div>
         
         <!-- 文件列表 -->
@@ -193,6 +150,20 @@
             <p>📂 暂无知识库文档</p>
             <p style="margin-top: 8px; font-size: 13px;">点击上方区域或拖拽文件上传</p>
           </div>
+        </div>
+        
+        <!-- 调试工具 -->
+        <div id="debugTools" style="margin-top: 20px; padding: 16px; background: var(--bg-secondary); border-radius: var(--radius); display: none;">
+          <h4 style="margin-bottom: 12px; font-size: 14px;">🔧 调试工具</h4>
+          <div style="margin-bottom: 12px;">
+            <input type="text" id="debugSearchInput" placeholder="输入测试关键词..." style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary);">
+          </div>
+          <button onclick="testSearch()" class="btn btn-primary" style="width: 100%; margin-bottom: 12px;">测试搜索</button>
+          <div id="debugSearchResults" style="max-height: 200px; overflow-y: auto; font-size: 12px;"></div>
+          <details style="margin-top: 12px;">
+            <summary style="cursor: pointer; color: var(--text-muted); font-size: 12px;">查看文档内容</summary>
+            <pre id="debugDocContent" style="margin-top: 8px; padding: 8px; background: var(--bg-base); border-radius: var(--radius-sm); max-height: 300px; overflow-y: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all;"></pre>
+          </details>
         </div>
       </div>
     </div>
@@ -206,6 +177,21 @@
     </div>
   </div>
 
+  <!-- ========== 本地模型加载进度 ========== -->
+  <div id="ollama-progress" class="ollama-progress hidden">
+    <div class="ollama-progress-header">
+      <span class="ollama-progress-icon">🤖</span>
+      <span class="ollama-progress-label">正在加载AI模型：<strong id="model-name"></strong></span>
+    </div>
+    <div class="ollama-progress-bar">
+      <div id="progress-fill" class="ollama-progress-fill"></div>
+    </div>
+    <div class="ollama-progress-footer">
+      <span id="progress-text" class="ollama-progress-text">准备中...</span>
+      <span id="progress-status" class="ollama-progress-status"></span>
+    </div>
+  </div>
+
   <!-- ========== Toast 容器 ========== -->
   <div id="toastContainer" class="toast-container"></div>
   
@@ -213,9 +199,9 @@
   <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
   <!-- 脚本 -->
-  <script src="js/auth.js"></script>
   <script src="js/api.js"></script>
   <script src="js/parser.js"></script>
+  <script src="js/embeddings.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

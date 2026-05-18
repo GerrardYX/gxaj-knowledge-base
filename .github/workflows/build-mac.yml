@@ -1,0 +1,47 @@
+name: Build macOS App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Cache GGUF model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: vendor/models
+          key: model-${{ hashFiles('scripts/download-bundles.js') }}
+          restore-keys: |
+            model-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download GGUF model (if not cached)
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: node scripts/download-bundles.js --platform darwin --arch arm64
+
+      - name: Build macOS app
+        run: npm run build:mac
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/mac-arm64/
+          retention-days: 7

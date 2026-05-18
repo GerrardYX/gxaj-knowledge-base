@@ -4,11 +4,11 @@
 
 ## 功能特性
 
-- 🔐 **账号登录** - 支持管理员和普通用户账号
 - 📚 **知识库管理** - 上传 Word (.docx) 和 Markdown (.md) 文档
 - 💬 **智能问答** - 基于上传的文档内容进行问答
 - 🎨 **MiniMax风格** - 深色主题，现代简洁的界面设计
 - 📱 **响应式** - 支持桌面和移动端访问
+- 🚀 **即开即用** - 无需登录，打开即可使用
 
 ## 快速开始
 
@@ -35,13 +35,6 @@ npm start
 - Chrome: [Allow CORS: Access-Control-Allow-Origin](https://chrome.google.com/webstore/detail/allow-cors-access-control/lhobafahddgcelffkeicbaginigeejlc)
 - Edge: 同上（基于 Chromium）
 - Firefox: [CORS Unblock](https://addons.mozilla.org/firefox/addon/cors-unblock/)
-
-## 登录账号
-
-| 角色 | 用户名 | 密码 |
-|------|--------|------|
-| 管理员 | admin | 123456 |
-| 普通用户 | user | 123456 |
 
 ## 使用说明
 
@@ -97,9 +90,9 @@ gxaj-knowledge-base/
 │   └── style.css       # 样式文件
 ├── js/
 │   ├── app.js          # 主应用逻辑
-│   ├── auth.js         # 认证模块
 │   ├── api.js          # API 调用（含代理逻辑）
-│   └── parser.js       # 文档解析模块
+│   ├── parser.js       # 文档解析模块
+│   └── embeddings.js   # 向量嵌入模块
 └── README.md           # 本文件
 ```
 

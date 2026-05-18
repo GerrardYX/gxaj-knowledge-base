@@ -6,8 +6,14 @@
   "scripts": {
     "start": "node proxy.js",
     "dev": "electron .",
-    "build:win": "electron-builder --win --x64",
-    "build:dir": "electron-builder --win --dir"
+    "prebuild:win": "node scripts/download-bundles.js --platform windows --arch amd64",
+    "prebuild:mac": "node scripts/download-bundles.js --platform darwin --arch arm64",
+    "prebuild:linux": "node scripts/download-bundles.js --platform linux --arch amd64",
+    "build:win": "npm run prebuild:win && electron-builder --win --x64",
+    "build:mac": "npm run prebuild:mac && electron-builder --mac --x64 --arm64",
+    "build:dir": "electron-builder --win --dir",
+    "pack:kb": "node scripts/pack-kb.js",
+    "pack:kb:mac": "node scripts/pack-kb.js --mac"
   },
   "build": {
     "appId": "com.gxaj.knowledgebase",
@@ -22,12 +28,16 @@
       "main.js",
       "preload.js",
       "proxy.js",
+      "assets/**/*",
       "js/**/*",
       "css/**/*",
+      "vendor/**/*",
       "node_modules/**/*",
       "package.json"
     ],
-    "extraResources": [],
+    "extraResources": [
+      "assets"
+    ],
     "asar": true,
     "win": {
       "target": [
@@ -41,6 +51,21 @@
       "icon": "build/icon.ico",
       "requestedExecutionLevel": "asInvoker"
     },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
@@ -51,15 +76,17 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "gxaj知识库",
-      "deleteAppDataOnInstaller": false,
+      "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
       "license": null
     },
     "publish": null
   },
   "dependencies": {
+    "@xenova/transformers": "^2.17.1",
     "axios": "^1.6.0",
     "cors": "^2.8.5",
+    "node-llama-cpp": "^3.18.1",
     "express": "^4.18.2",
     "jszip": "^3.10.1",
     "xmldom": "^0.6.0"

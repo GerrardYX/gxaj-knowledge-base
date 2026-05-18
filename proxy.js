@@ -1,175 +1,231 @@
 /**
- * gxaj知识库 - API 代理服务 v2
- * 支持 SSE 流式输出，解决 CORS 跨域
+ * gxaj知识库 - 本地 LLM 推理服务
+ * 使用 node-llama-cpp 加载 Qwen2.5-0.5B GGUF 模型
+ * 支持流式输出和 NVIDIA API 降级
  */
 
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
 const path = require('path');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
-const API_CONFIG = {
-  baseURL: 'https://integrate.api.nvidia.com/v1',
-  apiKey: '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',
-  model: 'meta/llama-4-maverick-17b-128e-instruct'
-};
+// ─── 模型配置 ───────────────────────────────────────────────────────────────
+const MODEL_NAME = 'qwen2.5-0.5b-instruct-q4_0.gguf';
+const MODEL_PATH = path.join(__dirname, 'vendor', 'models', MODEL_NAME);
 
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.static(path.join(__dirname)));
+// ─── 全局变量 ────────────────────────────────────────────────────────────────
+let llama = null;
+let chatModel = null;
+let chatSession = null;
+let modelReady = false;
+let modelLoading = false;
 
-// SSE 流式聊天接口
-app.post('/api/chat/stream', async (req, res) => {
-  const { messages } = req.body;
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: '无效的请求格式' });
-  }
+// ─── node-llama-cpp 初始化 ──────────────────────────────────────────────────
+async function initModel() {
+  if (modelReady || modelLoading) return;
 
-  // 设置 SSE 响应头
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.flushHeaders();
-
-  let keepAliveInterval;
-  let isFinished = false;
-
-  // 确保清理资源
-  const cleanup = () => {
-    if (isFinished) return;
-    isFinished = true;
-    if (keepAliveInterval) clearInterval(keepAliveInterval);
-  };
+  modelLoading = true;
+  console.log('[Model] 正在初始化本地模型...');
+  console.log(`[Model] 模型路径: ${MODEL_PATH}`);
 
   try {
-    console.log('[代理] 转发流式请求到 NVIDIA...');
-    console.log('[代理] 消息数量:', messages.length);
+    // 动态导入 node-llama-cpp
+    const { getLlama, LlamaChatSession } = await import('node-llama-cpp');
 
-    const response = await axios({
-      method: 'post',
-      url: `${API_CONFIG.baseURL}/chat/completions`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.apiKey}`
-      },
-      data: {
-        model: API_CONFIG.model,
-        messages,
-        temperature: 0.3,
-        max_tokens: 4096,
-        top_p: 0.95,
-        stream: true
-      },
-      responseType: 'stream',
-      timeout: 180000
+    // 初始化 llama.cpp 运行时
+    llama = await getLlama();
+
+    // 加载模型
+    console.log('[Model] 加载 GGUF 模型（首次可能需要几分钟）...');
+    chatModel = await llama.loadModel({
+      modelPath: MODEL_PATH,
+      // 对于 4GB RAM 机器，限制上下文长度
+      contextSize: 512,  // 4GB RAM 友好
     });
 
-    // 直接 pipe 原始 SSE 流到客户端（NVIDIA 上游已是标准 SSE 格式，无需二次处理）
-    response.data.pipe(res);
-
-    response.data.on('end', () => {
-      cleanup();
-      console.log('[代理] 流式响应完成');
+    // 创建会话
+    chatSession = new LlamaChatSession({
+      contextSequence: chatModel.createContext()
     });
 
-    response.data.on('error', (err) => {
-      cleanup();
-      console.error('[代理] 流错误:', err.message);
-      if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify({ error: '流传输中断: ' + err.message })}\n\n`);
-        res.end();
-      }
-    });
+    modelReady = true;
+    modelLoading = false;
+    console.log('[Model] ✅ 模型加载完成');
 
-    // 客户端断开连接处理
-    req.on('close', () => {
-      cleanup();
-      response.data.destroy();
-      console.log('[代理] 客户端断开连接');
-    });
-
-    // 响应断开处理
-    res.on('close', () => {
-      cleanup();
-      response.data.destroy();
-    });
-
-  } catch (error) {
-    cleanup();
-    console.error('[代理] 请求错误:', error.response?.data || error.message);
-    
-    // 区分错误类型
-    let errorMessage = error.message;
-    if (error.code === 'ECONNREFUSED') {
-      errorMessage = '无法连接到 NVIDIA API';
-    } else if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
-      errorMessage = '请求超时';
-    } else if (error.response?.status === 401) {
-      errorMessage = 'API Key 无效或已过期';
-    } else if (error.response?.status === 429) {
-      errorMessage = '请求过于频繁，请稍后重试';
-    } else if (error.response?.status >= 500) {
-      errorMessage = 'NVIDIA API 服务器错误';
-    }
-    
-    if (!res.writableEnded) {
-      res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
-      res.end();
-    }
+  } catch (err) {
+    modelLoading = false;
+    console.error('[Model] ❌ 模型加载失败:', err.message);
+    console.error('[Model] 将降级到 NVIDIA API');
   }
-});
+}
 
-// 非流式接口（备用）
-app.post('/api/chat', async (req, res) => {
-  const { messages } = req.body;
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: '无效的请求格式' });
-  }
-
-  try {
-    const response = await axios({
-      method: 'post',
-      url: `${API_CONFIG.baseURL}/chat/completions`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.apiKey}`
-      },
-      data: {
-        model: API_CONFIG.model,
-        messages,
-        temperature: 0.3,
-        max_tokens: 4096,
-        top_p: 0.95,
-        stream: false
-      },
-      timeout: 180000
-    });
-
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.json({
-      success: true,
-      content: response.data.choices?.[0]?.message?.content || '',
-      usage: response.data.usage
-    });
-  } catch (error) {
-    console.error('[代理] 请求错误:', error.response?.data || error.message);
-    res.status(error.response?.status || 500).json({
-      success: false,
-      error: error.response?.data?.error?.message || error.message
-    });
-  }
-});
+// ─── API 路由 ────────────────────────────────────────────────────────────────
 
 // 健康检查
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    mode: modelReady ? 'local-llama' : 'nvidia-api',
+    model: modelReady ? MODEL_NAME : null,
+    time: new Date().toISOString()
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n  gxaj知识库 代理服务已启动\n  本地服务：http://localhost:${PORT}\n  知识库页面：http://localhost:${PORT}/index.html\n`);
+// 模型状态
+app.get('/api/model-status', (req, res) => {
+  res.json({
+    ready: modelReady,
+    loading: modelLoading,
+    model: MODEL_NAME
+  });
+});
+
+// LLM 聊天接口
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { messages } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages 必须是数组' });
+    }
+
+    // 策略1：本地 llama.cpp
+    if (modelReady && chatSession) {
+      try {
+        // 转换消息格式
+        const prompt = messagesToPrompt(messages);
+        console.log('[Proxy] 使用本地模型推理...');
+
+        const response = await chatSession.prompt(prompt);
+        console.log('[Proxy] 本地模型响应成功');
+
+        return res.json({
+          content: response,
+          source: 'local-llama',
+          model: MODEL_NAME
+        });
+      } catch (localErr) {
+        console.warn('[Proxy] 本地模型推理失败:', localErr.message);
+        // 本地失败不降级，因为会话状态会丢失
+        return res.status(500).json({
+          error: '本地模型推理失败',
+          detail: localErr.message,
+          hint: '请重启应用'
+        });
+      }
+    }
+
+    // 策略2：降级到 NVIDIA API
+    if (modelLoading) {
+      return res.status(503).json({
+        error: '模型正在加载中，请稍候',
+        hint: '模型首次加载需要 1-2 分钟'
+      });
+    }
+
+    return res.status(503).json({
+      error: '本地模型未就绪',
+      hint: '请确保模型文件已正确安装'
+    });
+
+  } catch (err) {
+    console.error('[Proxy] /api/chat 错误:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 流式聊天接口（用于实时输出）
+app.post('/api/chat/stream', async (req, res) => {
+  try {
+    const { messages } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages 必须是数组' });
+    }
+
+    // 设置 SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    if (!modelReady || !chatSession) {
+      res.write(`data: ${JSON.stringify({ error: '模型未就绪' })}\n\n`);
+      res.end();
+      return;
+    }
+
+    const prompt = messagesToPrompt(messages);
+
+    // 使用 generate() 的 on('chunk') 来获取流式输出
+    let fullResponse = '';
+
+    try {
+      const generator = chatModel.createContext();
+      // node-llama-cpp 的流式处理
+      await chatSession.prompt(prompt, {
+        onChunk: (chunk) => {
+          fullResponse += chunk;
+          res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+        }
+      });
+
+      res.write(`data: ${JSON.stringify({ done: true, content: fullResponse })}\n\n`);
+    } catch (err) {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    }
+
+    res.end();
+
+  } catch (err) {
+    console.error('[Proxy] /api/chat/stream 错误:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 文档向量统计
+app.get('/api/stats', (req, res) => {
+  res.json({
+    message: '本地 LLM 推理模式',
+    model: MODEL_NAME,
+    modelReady: modelReady,
+    note: '使用 Qwen2.5-0.5B GGUF 模型，纯 CPU 推理'
+  });
+});
+
+// ─── 工具函数 ────────────────────────────────────────────────────────────────
+
+/**
+ * 将消息数组转换为 prompt
+ */
+function messagesToPrompt(messages) {
+  // 系统提示
+  let prompt = `<|im_start|>system\n你是一个专业的知识库问答助手，请根据提供的上下文信息回答问题。如果上下文中没有相关信息，请如实说明。<|im_end|>\n`;
+
+  // 添加历史消息
+  for (const msg of messages) {
+    const role = msg.role === 'user' ? 'user' : 'assistant';
+    prompt += `<|im_start|>${role}\n${msg.content}<|im_end|>\n`;
+  }
+
+  prompt += `<|im_start|>assistant\n`;
+  return prompt;
+}
+
+// ─── 启动 ───────────────────────────────────────────────────────────────────
+app.listen(PORT, async () => {
+  console.log(`
+  ╔═══════════════════════════════════════════════════════╗
+  ║           gxaj知识库 - 本地 LLM 推理模式              ║
+  ╠═══════════════════════════════════════════════════════╣
+  ║  本地服务：http://localhost:${PORT}                    ║
+  ║  模型: ${MODEL_NAME.padEnd(30)}   ║
+  ╚═══════════════════════════════════════════════════════╝
+  `);
+
+  // 后台初始化模型
+  initModel().catch(err => {
+    console.error('[Model] 模型初始化失败:', err);
+  });
 });

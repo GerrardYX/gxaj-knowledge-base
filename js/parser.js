@@ -77,17 +77,26 @@ async function parseWordFile(file) {
         const arrayBuffer = e.target.result;
         const zip = await JSZip.loadAsync(arrayBuffer);
         
-        // 读取 document.xml
-        const documentXml = await zip.file('word/document.xml')?.async('string');
+        // 读取 document.xml - 使用 uint8array 然后手动 UTF-8 解码
+        const uint8Array = await zip.file('word/document.xml')?.async('uint8array');
         
-        if (!documentXml) {
+        if (!uint8Array) {
           throw new Error('无法读取 Word 文档内容');
         }
         
+        // 手动 UTF-8 解码
+        const documentXml = new TextDecoder('utf-8').decode(uint8Array);
+        
+        console.log('[Parser] document.xml 长度:', documentXml.length, '字符');
+        
         // 解析 XML 并提取文本
         const text = extractTextFromDocXml(documentXml);
+        console.log('[Parser] 提取文本长度:', text.length, '字符');
+        console.log('[Parser] 文本预览（前100字符）:', text.substring(0, 100));
+        
         resolve(text);
       } catch (error) {
+        console.error('[Parser] 解析 Word 文件失败:', error);
         reject(error);
       }
     };
@@ -106,8 +115,16 @@ function extractTextFromDocXml(xml) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, 'text/xml');
   
+  // 检查解析错误
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) {
+    console.error('[Parser] XML 解析错误:', parseError.textContent);
+  }
+  
   // 获取所有段落
   const paragraphs = doc.getElementsByTagName('w:p');
+  console.log('[Parser] 找到段落数:', paragraphs.length);
+  
   const lines = [];
   
   for (const para of paragraphs) {
@@ -201,51 +218,149 @@ async function parseFile(file) {
 
 /**
  * 分割长文本为小块（用于处理大文档）
- * 智能分块：按段落边界分割，避免截断
+ * 智能分块：优先按【场景】或章节标题分割，确保每个场景独立成块
+ * 场景内容过长时，再按段落二次分块
  * @param {string} text - 原始文本
+ * @param {number} maxLength - 每块最大字符数（二次分块时使用）
+ * @returns {string[]} 文本块数组
+ */
+function splitTextIntoChunks(text, maxLength = 800) {
+  if (!text || !text.trim()) return [];
+
+  // 策略1：优先按【场景】或章节标题分割
+  // 匹配模式：数字编号+场景、【场景】、Markdown标题、Word标题标记
+  const scenePattern = /(?=\n*(?:\d+[\.\、]\d*[\.\、]?\s*【[^】]*】|\d+[\.\、]\d*\s*[^\n]{2,40}(?=\n))|【场景[^\n]*】|\n##\s+|\n###\s+|\n#{1,3}\s+)/;
+
+  const scenes = text.split(scenePattern).filter(s => s.trim());
+
+  if (scenes.length > 1) {
+    // 成功按场景分割，对每个场景进行二次处理
+    const chunks = [];
+    for (const scene of scenes) {
+      const trimmed = scene.trim();
+      if (!trimmed) continue;
+
+      if (trimmed.length <= maxLength) {
+        // 场景内容在限制内，直接作为一个块
+        chunks.push(trimmed);
+      } else {
+        // 场景内容过长，按段落二次分块（保留场景标题在第一个块中）
+        const subChunks = splitSceneIntoSubChunks(trimmed, maxLength);
+        chunks.push(...subChunks);
+      }
+    }
+
+    console.log(`[Parser] 文档已按场景分为 ${chunks.length} 个语义块`);
+    return chunks;
+  }
+
+  // 策略2：如果未能按场景分割，尝试按段落分块
+  const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+
+  if (paragraphs.length > 1 || text.length > maxLength) {
+    const chunks = mergeParagraphsIntoChunks(paragraphs, maxLength);
+    console.log(`[Parser] 文档已按段落分为 ${chunks.length} 个语义块`);
+    return chunks;
+  }
+
+  console.log(`[Parser] 文档作为单一完整块`);
+  return [text.trim()];
+}
+
+/**
+ * 将过长的场景按段落二次分块
+ * 保留场景标题在第一个子块中，保持语义连贯
+ * @param {string} scene - 场景完整文本
+ * @param {number} maxLength - 每块最大字符数
+ * @returns {string[]} 子块数组
+ */
+function splitSceneIntoSubChunks(scene, maxLength) {
+  // 提取场景标题（第一行或前几行标题内容）
+  const lines = scene.split('\n');
+  let headerLines = [];
+  let bodyStartIdx = 0;
+
+  // 收集标题行（Markdown标题、编号标题、场景标记等）
+  for (let i = 0; i < Math.min(lines.length, 3); i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (/^#{1,3}\s+/.test(line) || /^\d+[\.\、]/.test(line) || /【[^】]*】/.test(line)) {
+      headerLines.push(line);
+      bodyStartIdx = i + 1;
+    } else {
+      break;
+    }
+  }
+
+  const header = headerLines.join('\n');
+  const body = lines.slice(bodyStartIdx).join('\n').trim();
+
+  // 如果去掉标题后内容为空或很短
+  if (!body || body.length <= maxLength) {
+    return [scene.trim()];
+  }
+
+  // 按段落分割body
+  const bodyParagraphs = body.split(/\n\n+/).filter(p => p.trim());
+  const subChunks = [];
+  let currentBody = '';
+
+  for (const para of bodyParagraphs) {
+    const trimmed = para.trim();
+    if (!trimmed) continue;
+
+    if (currentBody.length + trimmed.length + 2 > maxLength) {
+      // 输出当前累积内容
+      const chunk = header ? `${header}\n${currentBody.trim()}` : currentBody.trim();
+      if (chunk.trim()) subChunks.push(chunk.trim());
+      currentBody = trimmed;
+    } else {
+      currentBody += (currentBody ? '\n\n' : '') + trimmed;
+    }
+  }
+
+  // 输出剩余内容
+  if (currentBody.trim()) {
+    const chunk = header ? `${header}\n${currentBody.trim()}` : currentBody.trim();
+    if (chunk.trim()) subChunks.push(chunk.trim());
+  }
+
+  return subChunks.length > 0 ? subChunks : [scene.trim()];
+}
+
+/**
+ * 将段落智能合并为 chunks
+ * 保持语义连贯性：相邻段落合并，直到接近 maxLength
+ * @param {string[]} paragraphs - 段落数组
  * @param {number} maxLength - 每块最大字符数
  * @returns {string[]} 文本块数组
  */
-function splitTextIntoChunks(text, maxLength = 8000) {
-  // 如果文本长度在限制内，直接返回
-  if (text.length <= maxLength) {
-    return [text];
-  }
-  
+function mergeParagraphsIntoChunks(paragraphs, maxLength) {
   const chunks = [];
-  
-  // 尝试按段落分割
-  let paragraphs = text.split(/\n\n+/);
-  
-  // 如果段落太大，按行分割
-  if (paragraphs.some(p => p.length > maxLength)) {
-    paragraphs = text.split(/\n/);
-  }
-  
   let currentChunk = '';
   
   for (const para of paragraphs) {
-    // 如果单个段落就超过限制，按句子分割
-    if (para.length > maxLength) {
+    const trimmed = para.trim();
+    if (!trimmed) continue;
+    
+    // 如果当前段落本身超过限制，单独成块
+    if (trimmed.length > maxLength) {
       if (currentChunk) {
         chunks.push(currentChunk.trim());
         currentChunk = '';
       }
-      
-      // 按句子或子段落继续分割
-      const subChunks = splitLargeParagraph(para, maxLength);
-      chunks.push(...subChunks);
+      chunks.push(trimmed);
       continue;
     }
     
-    // 检查是否需要开始新块
-    if (currentChunk.length + para.length + 2 > maxLength) {
+    // 检查合并后是否超过限制
+    if (currentChunk.length + trimmed.length + 2 > maxLength) {
       if (currentChunk) {
         chunks.push(currentChunk.trim());
       }
-      currentChunk = para;
+      currentChunk = trimmed;
     } else {
-      currentChunk += '\n\n' + para;
+      currentChunk += (currentChunk ? '\n\n' : '') + trimmed;
     }
   }
   
@@ -254,7 +369,7 @@ function splitTextIntoChunks(text, maxLength = 8000) {
     chunks.push(currentChunk.trim());
   }
   
-  console.log(`[Parser] 文档已分为 ${chunks.length} 个段落`);
+  console.log(`[Parser] 文档已分为 ${chunks.length} 个语义块`);
   return chunks;
 }
 
