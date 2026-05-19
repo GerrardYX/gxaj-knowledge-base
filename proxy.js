@@ -1,6 +1,6 @@
 /**
  * gxaj知识库 - 本地 LLM 推理服务
- * 使用 node-llama-cpp 加载 Qwen2.5-0.5B GGUF 模型
+ * 使用 node-llama-cpp 加载 Qwen3-0.6B GGUF 模型
  * 支持流式输出和 NVIDIA API 降级
  */
 
@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── 模型配置 ───────────────────────────────────────────────────────────────
-const MODEL_NAME = 'qwen2.5-0.5b-instruct-q4_0.gguf';
+const MODEL_NAME = 'Qwen3-0.6B-Q4_K_M.gguf';
 const MODEL_PATH = path.join(__dirname, 'vendor', 'models', MODEL_NAME);
 
 // ─── 全局变量 ────────────────────────────────────────────────────────────────
