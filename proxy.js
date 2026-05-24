@@ -46,8 +46,9 @@ async function initModel() {
     });
 
     // 创建会话
+    const context = await chatModel.createContext();
     chatSession = new LlamaChatSession({
-      contextSequence: chatModel.createContext()
+      contextSequence: context.getSequence()
     });
 
     modelReady = true;
@@ -162,10 +163,9 @@ app.post('/api/chat/stream', async (req, res) => {
     let fullResponse = '';
 
     try {
-      const generator = chatModel.createContext();
       // node-llama-cpp 的流式处理
       await chatSession.prompt(prompt, {
-        onChunk: (chunk) => {
+        onTextChunk: (chunk) => {
           fullResponse += chunk;
           res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
         }
