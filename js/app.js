@@ -1453,7 +1453,7 @@ function updateModelProgressUI(status) {
   // 模型加载中
   if (status.loading || status.modelPull) {
     container.classList.remove('hidden');
-    if (modelEl) modelEl.textContent = status.model || 'Qwen2.5-0.5B';
+    if (modelEl) modelEl.textContent = status.model || 'Qwen3-0.6B';
     if (fillEl) {
       // indeterminate 动画表示正在加载
       fillEl.style.width = status.percent >= 0 ? status.percent + '%' : '30%';
@@ -1469,7 +1469,7 @@ function updateModelProgressUI(status) {
     if (fillEl) fillEl.style.width = '100%';
     if (textEl) textEl.textContent = '就绪';
     if (statusEl) statusEl.textContent = '';
-    if (modelEl) modelEl.textContent = status.model || 'Qwen2.5-0.5B';
+    if (modelEl) modelEl.textContent = status.model || 'Qwen3-0.6B';
     // 2秒后自动隐藏
     setTimeout(() => {
       container.classList.add('hidden');

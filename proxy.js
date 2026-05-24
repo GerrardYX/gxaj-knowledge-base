@@ -201,7 +201,7 @@ app.get('/api/stats', (req, res) => {
  */
 function messagesToPrompt(messages) {
   // 系统提示
-  let prompt = `<|im_start|>system\n你是一个专业的知识库问答助手，请根据提供的上下文信息回答问题。如果上下文中没有相关信息，请如实说明。<|im_end|>\n`;
+  let prompt = `<|im_start|>system\n你是一位专业且友善的知识库助手。回答问题时请先进行简要思考分析，然后用自然、口语化的语气给出回答，像一位经验丰富的同事在解答问题。避免机械罗列，适当使用过渡词，保持对话的流畅感。如果上下文中没有相关信息，请如实说明。<|im_end|>\n`;
 
   // 添加历史消息
   for (const msg of messages) {
