@@ -25,11 +25,15 @@
         <div class="nav-section">
           <div class="nav-section-title">功能</div>
           <div class="nav-item active" id="newChatBtn">
-            <span class="icon">✨</span>
+            <span class="icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </span>
             <span>新建对话</span>
           </div>
           <div class="nav-item" id="knowledgeBtn">
-            <span class="icon">📚</span>
+            <span class="icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </span>
             <span>知识库管理</span>
           </div>
         </div>
@@ -45,8 +49,10 @@
         
         <div class="nav-section">
           <div class="nav-section-title">说明</div>
-          <div class="nav-item" onclick="alert('📖 使用说明：\n\n1. 点击左侧「📚 知识库管理」上传文档\n2. 支持 Word (.docx) 和 Markdown (.md) 格式\n3. 上传完成后，在底部输入问题\n4. 系统会基于知识库内容回答\n5. 对话会自动保存到历史记录')">
-            <span class="icon">❓</span>
+          <div class="nav-item" onclick="alert('📖 使用说明：\n\n1. 点击「知识库管理」上传文档\n2. 支持 Word (.docx) 和 Markdown (.md) 格式\n3. 上传完成后，在底部输入问题\n4. 系统会基于知识库内容回答\n5. 对话会自动保存到历史记录')">
+            <span class="icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </span>
             <span>使用帮助</span>
           </div>
         </div>
@@ -63,10 +69,18 @@
     <main class="main-content">
       <!-- 顶部栏 -->
       <header class="chat-header">
-        <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
-        <h2>💬 智能问答</h2>
+        <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleSidebar()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          智能问答
+        </h2>
         <div class="header-actions">
-          <button class="theme-toggle" id="themeToggle" title="切换主题">🌙</button>
+          <button class="theme-toggle" id="themeToggle" title="切换主题">
+            <svg class="theme-icon-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="theme-icon-dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
           <div id="connectionStatus" class="connection-status">
             <span class="status-dot"></span>
             <span class="status-text">检查连接...</span>
@@ -81,18 +95,25 @@
       <div id="chatArea" class="chat-area">
         <!-- 欢迎区域 -->
         <div id="welcomeArea" class="chat-welcome">
-          <div class="welcome-icon">🤖</div>
+          <div class="welcome-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+              <path d="M8 14v-2a4 4 0 0 1 8 0v2"/>
+              <circle cx="12" cy="16" r="1"/>
+              <path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/>
+              <path d="M14 19c.57 1.75 2.45 3 4.67 3C21.05 22 23 20.05 23 17.67c0-2.22-1.25-4.1-3-4.67"/>
+            </svg>
+          </div>
           <h3>欢迎使用 gxaj知识库</h3>
-          <p>
-            我是基于知识库的智能问答助手。<br>
-            请先上传知识库文档，然后开始提问。
-          </p>
+          <p>我是基于知识库的智能问答助手，请先上传知识库文档，然后开始提问。</p>
           <div class="quick-actions">
             <div class="quick-action" onclick="openKnowledgePanel()">
-              📤 上传知识库文档
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              上传知识库文档
             </div>
-            <div class="quick-action" onclick="elements.messageInput.focus(); elements.messageInput.value='有哪些上传文档的方法？';">
-              ❓ 如何使用？
+            <div class="quick-action" onclick="elements.messageInput.focus(); elements.messageInput.value='有哪些上传文档的方法？'; handleSendMessage();">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              如何使用？
             </div>
           </div>
         </div>
@@ -112,7 +133,10 @@
             ></textarea>
             <div class="input-actions">
               <button id="sendBtn" class="send-btn" title="发送">
-                ➤
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
               </button>
             </div>
           </div>
@@ -128,7 +152,10 @@
   <div id="knowledgePanel" class="panel-overlay">
     <div class="panel">
         <div class="panel-header">
-          <h3>📚 知识库管理</h3>
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            知识库管理
+          </h3>
           <div class="panel-header-actions">
             <button class="btn btn-secondary" id="exportKnowledgeBtn" title="导出知识库（含向量数据）" style="font-size: 12px; padding: 6px 12px;">📦 导出</button>
             <button class="panel-close" id="closeKnowledgePanel">✕</button>
@@ -138,7 +165,9 @@
       <div class="panel-body">
         <!-- 上传区域 -->
         <div id="uploadZone" class="upload-zone">
-          <div class="upload-icon">📤</div>
+          <div class="upload-icon">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
           <h4>点击或拖拽上传文件</h4>
           <p>支持 .docx 和 .md 格式</p>
           <input type="file" id="fileInput" accept=".docx,.md,.markdown" multiple style="display: none;">
@@ -180,7 +209,9 @@
   <!-- ========== 本地模型加载进度 ========== -->
   <div id="ollama-progress" class="ollama-progress hidden">
     <div class="ollama-progress-header">
-      <span class="ollama-progress-icon">🤖</span>
+      <span class="ollama-progress-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg>
+      </span>
       <span class="ollama-progress-label">正在加载AI模型：<strong id="model-name"></strong></span>
     </div>
     <div class="ollama-progress-bar">

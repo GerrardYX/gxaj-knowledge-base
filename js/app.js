@@ -89,13 +89,13 @@ function loadConversationHistory() {
   const html = conversations.map(conv => `
     <div class="history-item ${conv.id === state.currentConversationId ? 'active' : ''}" 
          data-id="${conv.id}">
-      <div class="history-icon">💬</div>
+      <div class="history-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
       <div class="history-content" onclick="loadConversation('${conv.id}')">
         <div class="history-title">${escapeHtml(conv.title)}</div>
         <div class="history-time">${formatConversationTime(conv.updatedAt)}</div>
       </div>
       <div class="history-actions">
-        <button class="history-delete-btn" onclick="event.stopPropagation(); removeConversation('${conv.id}')" title="删除对话">🗑️</button>
+        <button class="history-delete-btn" onclick="event.stopPropagation(); removeConversation('${conv.id}')" title="删除对话"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
       </div>
     </div>
   `).join('');
@@ -236,7 +236,7 @@ function initEventListeners() {
   
   // 关闭面板
   document.getElementById('closeKnowledgePanel').addEventListener('click', closeKnowledgePanel);
-  elements.knowledgePanel.querySelector('.panel-overlay')?.addEventListener('click', (e) => {
+  elements.knowledgePanel.addEventListener('click', (e) => {
     if (e.target === elements.knowledgePanel) closeKnowledgePanel();
   });
 }
@@ -293,13 +293,16 @@ function addMessage(role, content) {
   div.className = `message ${role}`;
   div.innerHTML = `
     <div class="message-avatar">
-      ${role === 'assistant' ? '🤖' : state.currentUser?.displayName.charAt(0) || 'U'}
+      ${role === 'assistant' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg>' : (state.currentUser?.displayName?.charAt(0) || 'U')}
     </div>
     <div class="message-content">
       <div class="message-bubble">
         ${formatMessageContent(content)}
       </div>
       <div class="message-time">${message.time}</div>
+      <div class="message-actions">
+        <button class="message-action-btn copy-btn" title="复制内容" onclick="copyMessageContent(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制</button>
+      </div>
     </div>
   `;
   elements.welcomeArea.style.display = 'none';
@@ -330,13 +333,16 @@ function renderMessages() {
     div.className = `message ${msg.role}`;
     div.innerHTML = `
       <div class="message-avatar">
-        ${msg.role === 'assistant' ? '🤖' : state.currentUser?.displayName.charAt(0) || 'U'}
+        ${msg.role === 'assistant' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg>' : (state.currentUser?.displayName?.charAt(0) || 'U')}
       </div>
       <div class="message-content">
         <div class="message-bubble">
           ${formatMessageContent(msg.content)}
         </div>
         <div class="message-time">${msg.time}</div>
+        <div class="message-actions">
+          <button class="message-action-btn copy-btn" title="复制内容" onclick="copyMessageContent(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制</button>
+        </div>
       </div>
     `;
     fragment.appendChild(div);
@@ -363,7 +369,7 @@ function showTypingIndicator() {
   div.className = 'message assistant';
   div.id = 'typingMessage';
   div.innerHTML = `
-    <div class="message-avatar">🤖</div>
+    <div class="message-avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg></div>
     <div class="message-content">
       <div class="message-bubble">
         <div class="typing-indicator">
@@ -379,7 +385,10 @@ function showTypingIndicator() {
 
   // 使用 requestAnimationFrame 优化滚动
   requestAnimationFrame(() => {
-    elements.chatArea.scrollTop = elements.chatArea.scrollHeight;
+    elements.chatArea.scrollTo({
+      top: elements.chatArea.scrollHeight,
+      behavior: 'smooth'
+    });
   });
 }
 
@@ -676,7 +685,7 @@ function appendAssistantMessage(content, noAvatar = false) {
   const div = document.createElement('div');
   div.className = 'message assistant';
   div.innerHTML = `
-    ${noAvatar ? '' : '<div class="message-avatar">🤖</div>'}
+    ${noAvatar ? '' : '<div class="message-avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg></div>'}
     <div class="message-content">
       <div class="message-bubble">
         ${formatMessageContent(content)}
@@ -688,7 +697,10 @@ function appendAssistantMessage(content, noAvatar = false) {
 
   // 使用 requestAnimationFrame 优化滚动
   requestAnimationFrame(() => {
-    elements.chatArea.scrollTop = elements.chatArea.scrollHeight;
+    elements.chatArea.scrollTo({
+      top: elements.chatArea.scrollHeight,
+      behavior: 'smooth'
+    });
   });
 }
 
@@ -744,7 +756,10 @@ function showThinkingAnimation(thinking, duration = 2000) {
 
     // 滚动到底部
     requestAnimationFrame(() => {
-      elements.chatArea.scrollTop = elements.chatArea.scrollHeight;
+      elements.chatArea.scrollTo({
+        top: elements.chatArea.scrollHeight,
+        behavior: 'smooth'
+      });
     });
 
     // 模拟打字效果（逐渐显示思考内容）
@@ -808,7 +823,10 @@ function updateLastAssistantMessage(thinking, content) {
     }
 
     requestAnimationFrame(() => {
-      elements.chatArea.scrollTop = elements.chatArea.scrollHeight;
+      elements.chatArea.scrollTo({
+        top: elements.chatArea.scrollHeight,
+        behavior: 'smooth'
+      });
     });
   }
 }
@@ -820,9 +838,9 @@ function scrollToBottom() {
   scrollThrottleTimer = setTimeout(() => {
     const chatArea = elements.chatArea;
     if (chatArea) {
-      // 使用 requestAnimationFrame 优化滚动性能
-      requestAnimationFrame(() => {
-        chatArea.scrollTop = chatArea.scrollHeight;
+      chatArea.scrollTo({
+        top: chatArea.scrollHeight,
+        behavior: 'smooth'
       });
     }
     scrollThrottleTimer = null;
@@ -958,7 +976,12 @@ function updateThemeIcon() {
   const btn = document.getElementById('themeToggle');
   if (btn) {
     const theme = document.documentElement.getAttribute('data-theme') || 'light';
-    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    const lightIcon = btn.querySelector('.theme-icon-light');
+    const darkIcon = btn.querySelector('.theme-icon-dark');
+    if (lightIcon && darkIcon) {
+      lightIcon.style.display = theme === 'dark' ? 'none' : 'block';
+      darkIcon.style.display = theme === 'dark' ? 'block' : 'none';
+    }
     btn.title = theme === 'dark' ? '切换到浅色主题' : '切换到深色主题';
   }
 }
@@ -971,7 +994,11 @@ function openKnowledgePanel() {
 }
 
 function closeKnowledgePanel() {
-  elements.knowledgePanel.classList.remove('active');
+  const panel = elements.knowledgePanel;
+  panel.classList.add('closing');
+  panel.addEventListener('animationend', () => {
+    panel.classList.remove('active', 'closing');
+  }, { once: true });
 }
 
 /**
@@ -1337,7 +1364,7 @@ function renderFileList() {
         </div>
       </div>
       <div class="file-actions">
-        <button class="delete" onclick="deleteDocument('${doc.id}')" title="删除">🗑️</button>
+        <button class="delete" onclick="deleteDocument('${doc.id}')" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
       </div>
     </div>
   `).join('');
@@ -1492,11 +1519,15 @@ function toggleSidebar() {
 // ============ UI 工具 ============
 function showLoading(text = '加载中...') {
   elements.loadingText.textContent = text;
+  elements.loadingOverlay.classList.remove('hiding');
   elements.loadingOverlay.classList.add('active');
 }
 
 function hideLoading() {
-  elements.loadingOverlay.classList.remove('active');
+  elements.loadingOverlay.classList.add('hiding');
+  elements.loadingOverlay.addEventListener('animationend', () => {
+    elements.loadingOverlay.classList.remove('active', 'hiding');
+  }, { once: true });
 }
 
 function showToast(message, type = 'info') {
@@ -1517,8 +1548,8 @@ function showToast(message, type = 'info') {
   elements.toastContainer.appendChild(toast);
   
   setTimeout(() => {
-    toast.style.animation = 'slideIn 0.3s ease reverse';
-    setTimeout(() => toast.remove(), 300);
+    toast.classList.add('toast-exit');
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
   }, 3000);
 }
 
@@ -1616,6 +1647,29 @@ function updateModelProgressUI(status) {
   // 其他状态——不显示进度条
   container.classList.add('hidden');
 }
+
+// ============ 交互增强 ============
+
+/**
+ * 复制消息内容到剪贴板
+ */
+window.copyMessageContent = function(btn) {
+  const messageContent = btn.closest('.message-content');
+  const bubble = messageContent.querySelector('.message-bubble');
+  const text = bubble.textContent.trim();
+
+  navigator.clipboard.writeText(text).then(() => {
+    btn.classList.add('copied');
+    const original = btn.textContent;
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = original;
+    }, 1500);
+  }).catch(() => {
+    showToast('复制失败', 'error');
+  });
+};
 
 // ============ 导出 ============
 window.App = {
