@@ -42,6 +42,7 @@ let chatModel = null;
 let chatSession = null;
 let modelReady = false;
 let modelLoading = false;
+let modelError = null;
 
 // ─── node-llama-cpp 初始化 ──────────────────────────────────────────────────
 async function initModel() {
@@ -78,6 +79,7 @@ async function initModel() {
 
   } catch (err) {
     modelLoading = false;
+    modelError = err.message;
     console.error('[Model] ❌ 模型加载失败:', err.message);
     console.error('[Model] 将降级到 NVIDIA API');
   }
@@ -100,7 +102,8 @@ app.get('/api/model-status', (req, res) => {
   res.json({
     ready: modelReady,
     loading: modelLoading,
-    model: MODEL_NAME
+    model: MODEL_NAME,
+    error: modelError
   });
 });
 

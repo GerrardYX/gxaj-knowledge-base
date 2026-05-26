@@ -1542,8 +1542,8 @@ function initModelStatusListener() {
   if (window.electronAPI.getModelStatus) {
     window.electronAPI.getModelStatus().then((status) => {
       console.log('[模型状态查询]', status);
-      if (status && !status.ready) {
-        updateModelProgressUI({ loading: true, status: '模型加载中...' });
+      if (status) {
+        updateModelProgressUI(status);
       }
     }).catch(() => {});
   }
@@ -1590,11 +1590,21 @@ function updateModelProgressUI(status) {
     return;
   }
 
-  // 错误状态
-  if (status.error) {
-    if (textEl) textEl.textContent = '加载失败';
-    if (statusEl) statusEl.textContent = status.error;
-    showToast(`模型加载失败: ${status.error}`, 'error');
+  // 模型未就绪且已停止加载（失败或不存在）
+  if (!status.loading && !status.ready) {
+    container.classList.remove('hidden');
+    if (modelEl) modelEl.textContent = status.model || 'Qwen3-0.6B';
+    if (fillEl) {
+      fillEl.style.width = '0%';
+      fillEl.classList.remove('indeterminate');
+    }
+    if (textEl) textEl.textContent = '未就绪';
+    if (status.error) {
+      if (statusEl) statusEl.textContent = status.error;
+      showToast(`模型加载失败: ${status.error}`, 'error');
+    } else {
+      if (statusEl) statusEl.textContent = '本地模型未安装，将使用云端 API';
+    }
     return;
   }
 

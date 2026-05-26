@@ -14,6 +14,8 @@ let proxyProcess;
 let proxyPort = 3001; // 实际端口（proxy 可能自动递增）
 const PROXY_PORT = 3001;
 const MAX_WAIT_MS = 15000; // 等待 proxy 启动的最长时间
+const MODEL_POLL_INTERVAL = 3000; // 模型状态轮询间隔（毫秒）
+let modelPollTimer = null;
 
 // ─── 性能优化：针对赛扬CPU+4GB内存 ───────────────────────────────────────────
 app.commandLine.appendSwitch('disable-gpu');           // 彻底禁用 GPU 进程
@@ -78,6 +80,39 @@ function waitForProxy(port, timeout) {
     }
     check();
   });
+}
+
+// ─── 轮询 proxy 模型状态并推送给渲染进程 ──────────────────────────────────
+function pollModelStatus() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  http.get(`http://127.0.0.1:${proxyPort}/api/model-status`, (res) => {
+    let data = '';
+    res.on('data', chunk => { data += chunk; });
+    res.on('end', () => {
+      try {
+        const status = JSON.parse(data);
+        mainWindow.webContents.send('model-status', status);
+      } catch {
+        mainWindow.webContents.send('model-status', { ready: false, loading: false, error: '状态解析失败' });
+      }
+    });
+  }).on('error', () => {
+    mainWindow.webContents.send('model-status', { ready: false, loading: false, error: 'Proxy 未响应' });
+  });
+}
+
+function startModelPolling() {
+  if (modelPollTimer) clearInterval(modelPollTimer);
+  pollModelStatus(); // 立即执行一次
+  modelPollTimer = setInterval(pollModelStatus, MODEL_POLL_INTERVAL);
+}
+
+function stopModelPolling() {
+  if (modelPollTimer) {
+    clearInterval(modelPollTimer);
+    modelPollTimer = null;
+  }
 }
 
 // ─── IPC 处理 ───────────────────────────────────────────────────────────────
@@ -175,10 +210,14 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+
+  // 启动模型状态轮询（每 3 秒推送一次状态给前端）
+  startModelPolling();
 });
 
 app.on('window-all-closed', () => {
-  // 停止 proxy 进程
+  // 停止轮询和 proxy 进程
+  stopModelPolling();
   if (proxyProcess) {
     proxyProcess.kill('SIGTERM');
   }
