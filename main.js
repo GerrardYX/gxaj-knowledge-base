@@ -11,6 +11,7 @@ const http = require('http');
 
 let mainWindow;
 let proxyProcess;
+let proxyPort = 3001; // 实际端口（proxy 可能自动递增）
 const PROXY_PORT = 3001;
 const MAX_WAIT_MS = 15000; // 等待 proxy 启动的最长时间
 
@@ -37,7 +38,14 @@ function startProxyServer() {
   });
 
   proxyProcess.stdout.on('data', (data) => {
-    console.log('[proxy]', data.toString().trim());
+    const text = data.toString().trim();
+    console.log('[proxy]', text);
+    // 检测 proxy 输出的实际端口（格式：http://localhost:XXXX）
+    const portMatch = text.match(/http:\/\/localhost:(\d+)/);
+    if (portMatch) {
+      proxyPort = parseInt(portMatch[1], 10);
+      console.log(`[proxy] 检测到实际端口: ${proxyPort}`);
+    }
   });
 
   proxyProcess.stderr.on('data', (data) => {
@@ -77,7 +85,7 @@ function waitForProxy(port, timeout) {
 // 获取模型状态
 ipcMain.handle('get-model-status', async () => {
   return new Promise((resolve) => {
-    http.get(`http://127.0.0.1:${PROXY_PORT}/api/model-status`, (res) => {
+    http.get(`http://127.0.0.1:${proxyPort}/api/model-status`, (res) => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
@@ -103,7 +111,7 @@ ipcMain.handle('restart-model', async () => {
   // 重启
   startProxyServer();
   try {
-    await waitForProxy(PROXY_PORT, MAX_WAIT_MS);
+    await waitForProxy(proxyPort, MAX_WAIT_MS);
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -159,8 +167,8 @@ app.whenReady().then(async () => {
   startProxyServer();
 
   try {
-    await waitForProxy(PROXY_PORT, MAX_WAIT_MS);
-    console.log(`[App] Proxy 服务已就绪 (port ${PROXY_PORT})`);
+    await waitForProxy(proxyPort, MAX_WAIT_MS);
+    console.log(`[App] Proxy 服务已就绪 (port ${proxyPort})`);
     console.log('[App] 模型将在后台加载，请稍候...');
   } catch (e) {
     console.warn('[App] Proxy 启动超时，继续运行:', e.message);

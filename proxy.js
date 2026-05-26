@@ -13,6 +13,25 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 const PORT = process.env.PORT || 3001;
 
+// ─── 端口占用自动递增 ──────────────────────────────────────────────────────────
+function findAvailablePort(basePort) {
+  return new Promise((resolve, reject) => {
+    const server = require('net').createServer();
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`[Port] 端口 ${basePort} 已被占用，尝试 ${basePort + 1}...`);
+        resolve(findAvailablePort(basePort + 1));
+      } else {
+        reject(err);
+      }
+    });
+    server.once('listening', () => {
+      server.close(() => resolve(basePort));
+    });
+    server.listen(basePort);
+  });
+}
+
 // ─── 模型配置 ───────────────────────────────────────────────────────────────
 const MODEL_NAME = 'Qwen3-0.6B-Q4_K_M.gguf';
 const MODEL_PATH = path.join(__dirname, 'vendor', 'models', MODEL_NAME);
@@ -102,10 +121,11 @@ app.post('/api/chat', async (req, res) => {
         console.log('[Proxy] 使用本地模型推理...');
 
         const response = await chatSession.prompt(prompt);
+        const cleaned = cleanModelOutput(response);
         console.log('[Proxy] 本地模型响应成功');
 
         return res.json({
-          content: response,
+          content: cleaned,
           source: 'local-llama',
           model: MODEL_NAME
         });
@@ -173,7 +193,7 @@ app.post('/api/chat/stream', async (req, res) => {
         }
       });
 
-      res.write(`data: ${JSON.stringify({ done: true, content: fullResponse })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, content: cleanModelOutput(fullResponse) })}\n\n`);
     } catch (err) {
       res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
     }
@@ -192,18 +212,42 @@ app.get('/api/stats', (req, res) => {
     message: '本地 LLM 推理模式',
     model: MODEL_NAME,
     modelReady: modelReady,
-    note: '使用 Qwen2.5-0.5B GGUF 模型，纯 CPU 推理'
+    note: '使用 Qwen3-0.6B GGUF 模型，纯 CPU 推理'
   });
 });
 
 // ─── 工具函数 ────────────────────────────────────────────────────────────────
 
 /**
+ * 清理 Qwen3 模型输出中的特殊标签
+ * Qwen3 可能输出 <|im_end|>、、</_answer> 等标签
+ */
+function cleanModelOutput(text) {
+  return text
+    .replace(/<\|im_end\|>/g, '')
+    .replace(/<\|im_start\|>.*?\n?/g, '')
+    .replace(/<\/?think>.*?<\/think>/gs, '')
+    .replace(/<\/?answer>/g, '')
+    .replace(/<\|[^|]*\|>/g, '')
+    .trim();
+}
+
+/**
  * 将消息数组转换为 prompt
  */
 function messagesToPrompt(messages) {
-  // 系统提示
-  let prompt = `<|im_start|>system\n你是一位专业且友善的知识库助手。回答问题时请先进行简要思考分析，然后用自然、口语化的语气给出回答，像一位经验丰富的同事在解答问题。避免机械罗列，适当使用过渡词，保持对话的流畅感。如果上下文中没有相关信息，请如实说明。<|im_end|>\n`;
+  // 系统提示：/no_think 禁止 Qwen3 输出 <think> 思维链
+  let prompt = `<|im_start|>system
+/no_think
+你是 gxaj 知识库的 AI 助手。请用以下风格回答问题：
+
+1. 像一个亲切的同事一样对话，自然流畅，不要像机器人在念稿
+2. 可以用"嗯"、"好的"、"这个嘛"等口语词开头，增加温度
+3. 如果需要分点说明，用"首先"、"另外"等连接，而不是冰冷地列 1.2.3.
+4. 遇到不确定的问题，坦诚说"这个我不太确定"，不要编造
+5. 回答简洁有力，不要废话，但也不能太简短让人摸不着头脑
+6. 最后如果合适，可以加一句关心的话<|im_end|>
+`;
 
   // 添加历史消息
   for (const msg of messages) {
@@ -216,18 +260,22 @@ function messagesToPrompt(messages) {
 }
 
 // ─── 启动 ───────────────────────────────────────────────────────────────────
-app.listen(PORT, async () => {
-  console.log(`
+(async () => {
+  const port = await findAvailablePort(PORT);
+
+  app.listen(port, async () => {
+    console.log(`
   ╔═══════════════════════════════════════════════════════╗
   ║           gxaj知识库 - 本地 LLM 推理模式              ║
   ╠═══════════════════════════════════════════════════════╣
-  ║  本地服务：http://localhost:${PORT}                    ║
+  ║  本地服务：http://localhost:${port}                    ║
   ║  模型: ${MODEL_NAME.padEnd(30)}   ║
   ╚═══════════════════════════════════════════════════════╝
   `);
 
-  // 后台初始化模型
-  initModel().catch(err => {
-    console.error('[Model] 模型初始化失败:', err);
+    // 后台初始化模型
+    initModel().catch(err => {
+      console.error('[Model] 模型初始化失败:', err);
+    });
   });
-});
+})();

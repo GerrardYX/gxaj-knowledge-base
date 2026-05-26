@@ -1044,33 +1044,34 @@ async function loadKnowledgeFilesFromAssets() {
 }
 
 function loadDocuments() {
-  // 优先从 assets/knowledge_files/ 自动解析（首次启动）
-  if (state.documents.length === 0) {
-    loadKnowledgeFilesFromAssets().then((success) => {
-      if (!success) {
-        // 如果自动解析失败或没有预打包文件，从 localStorage 加载
-        const saved = localStorage.getItem('gxaj_documents');
-        if (saved) {
-          try {
-            const docs = JSON.parse(saved);
-            state.documents = docs.map(doc => ({
-              ...doc,
-              chunks: (doc.chunks || []).map(c => ({
-                text: c.text,
-                embedding: c.embedding ? new Float32Array(c.embedding) : null
-              }))
-            }));
-            console.log('[Load] 从 localStorage 加载了', state.documents.length, '个文档');
-            if (state.documents.length > 0) {
-              console.log('[Load] 第一个文档段落数:', state.documents[0].chunks.length);
-            }
-          } catch (e) {
-            console.error('[Load] 解析 localStorage 失败:', e);
-            state.documents = [];
-          }
-        }
+  // 策略：优先从 localStorage 恢复（保留用户手动上传的文档）
+  // 仅在 localStorage 为空时才尝试从 assets/ 自动解析
+  const saved = localStorage.getItem('gxaj_documents');
+  if (saved) {
+    try {
+      const docs = JSON.parse(saved);
+      if (docs.length > 0) {
+        state.documents = docs.map(doc => ({
+          ...doc,
+          chunks: (doc.chunks || []).map(c => ({
+            text: c.text,
+            embedding: c.embedding ? new Float32Array(c.embedding) : null
+          }))
+        }));
+        console.log('[Load] 从 localStorage 恢复了', state.documents.length, '个文档');
+        renderFileList();
+        updateKnowledgeStatus();
+        preloadEmbeddingModel();
+        return; // localStorage 有数据，直接返回
       }
-      // 无论从哪里加载，都更新 UI
+    } catch (e) {
+      console.error('[Load] 解析 localStorage 失败:', e);
+    }
+  }
+
+  // localStorage 为空 → 尝试从 assets/knowledge_files/ 自动解析（首次启动）
+  if (state.documents.length === 0) {
+    loadKnowledgeFilesFromAssets().then(() => {
       renderFileList();
       updateKnowledgeStatus();
       if (state.documents.length > 0) {
