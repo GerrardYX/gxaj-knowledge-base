@@ -418,7 +418,7 @@ async function sendToAI(userMessage) {
 
     if (allChunks.length === 0) {
       const msg = '📂 知识库暂无文档，请先让管理员上传相关文档。';
-      updateLastAssistantMessage(msg);
+      updateLastAssistantMessage('', msg);
       const lastMsg = state.messages[state.messages.length - 1];
       if (lastMsg && lastMsg.role === 'assistant') {
         lastMsg.content = msg;
@@ -471,17 +471,23 @@ async function sendToAI(userMessage) {
     }
 
     // 生成回答
-    updateEmbeddingStatus('📝 正在整理答案...');
+    updateEmbeddingStatus('🧠 AI 正在深度思考...');
     const matchedDocs = results.map(r => chunkToDocMap[r.index] || '未知文档');
-    const answer = await Embeddings.buildAnswer(results, userMessage, matchedDocs);
+    const result = await Embeddings.buildAnswer(results, userMessage, matchedDocs);
 
     removeTypingIndicator();
 
-    // 更新消息
-    updateLastAssistantMessage(answer);
+    // 如果有思考过程，先展示思考（带动画）
+    if (result.thinking) {
+      updateEmbeddingStatus('💭 思考完成，整理答案...');
+      await showThinkingAnimation(result.thinking);
+    }
+
+    // 更新消息（显示正式回答）
+    updateLastAssistantMessage('', result.content);
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage && lastMessage.role === 'assistant') {
-      lastMessage.content = answer;
+      lastMessage.content = result.content;
     }
 
     saveConversation(state.currentConversationId, state.messages);
@@ -490,7 +496,7 @@ async function sendToAI(userMessage) {
   } catch (error) {
     console.error('Search Error:', error);
     removeTypingIndicator();
-    updateLastAssistantMessage(`❌ 检索过程发生错误: ${error.message}\n\n请刷新页面后重试，或联系管理员检查知识库状态。`);
+    updateLastAssistantMessage('', `❌ 检索过程发生错误: ${error.message}\n\n请刷新页面后重试，或联系管理员检查知识库状态。`);
     const lastMsg = state.messages[state.messages.length - 1];
     if (lastMsg && lastMsg.role === 'assistant') {
       lastMsg.content = updateLastAssistantMessage.displayText || error.message;
@@ -685,15 +691,120 @@ function appendAssistantMessage(content) {
   });
 }
 
-function updateLastAssistantMessage(content) {
+/**
+ * 构建思考过程的 HTML 块（可折叠）
+ */
+function buildThinkingBlockHTML(thinking) {
+  const thinkingId = 'thinking-' + Date.now();
+  const preview = thinking.length > 80 ? thinking.substring(0, 80) + '...' : thinking;
+  return `
+    <div class="thinking-block" id="${thinkingId}">
+      <div class="thinking-toggle">
+        <span class="thinking-icon">💭</span>
+        <span class="thinking-label">已深度思考</span>
+        <span class="thinking-arrow">▶</span>
+      </div>
+      <div class="thinking-content">
+        <p>${escapeHtml(thinking)}</p>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * 思考过程打字动画
+ * 模拟 AI 正在思考的效果
+ * @param {string} thinking - 思考内容
+ * @param {number} duration - 动画持续时间（毫秒）
+ */
+function showThinkingAnimation(thinking, duration = 2000) {
+  return new Promise((resolve) => {
+    const messages = elements.messageList.querySelectorAll('.message.assistant');
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) { resolve(); return; }
+
+    const bubble = lastMessage.querySelector('.message-bubble');
+
+    // 显示思考中的动画
+    bubble.innerHTML = `
+      <div class="thinking-block thinking-active" id="thinking-anim">
+        <div class="thinking-toggle">
+          <span class="thinking-icon thinking-spinner">🧠</span>
+          <span class="thinking-label">正在深度思考...</span>
+          <span class="thinking-dots">
+            <span>.</span><span>.</span><span>.</span>
+          </span>
+        </div>
+        <div class="thinking-content">
+          <p class="thinking-text-anim">${escapeHtml(thinking.substring(0, 40))}<span class="thinking-cursor">|</span></p>
+        </div>
+      </div>
+    `;
+
+    // 滚动到底部
+    requestAnimationFrame(() => {
+      elements.chatArea.scrollTop = elements.chatArea.scrollHeight;
+    });
+
+    // 模拟打字效果（逐渐显示思考内容）
+    const textEl = bubble.querySelector('.thinking-text-anim');
+    const cursorEl = bubble.querySelector('.thinking-cursor');
+    const thinkBlock = bubble.querySelector('.thinking-block');
+    let charIndex = 0;
+    const charInterval = Math.min(duration / thinking.length, 30);
+    const startTime = Date.now();
+
+    const typeTimer = setInterval(() => {
+      charIndex += 2; // 每次显示2个字符
+      if (charIndex >= thinking.length || Date.now() - startTime > duration) {
+        clearInterval(typeTimer);
+        // 动画完成
+        thinkBlock.classList.remove('thinking-active');
+        thinkBlock.classList.add('thinking-done');
+        resolve();
+      } else {
+        if (textEl) {
+          textEl.textContent = thinking.substring(0, charIndex);
+        }
+      }
+    }, charInterval);
+  });
+}
+
+function updateLastAssistantMessage(thinking, content) {
+  // 兼容旧调用：updateLastAssistantMessage(content) — thinking 为 undefined 时 content 变成 thinking
+  if (content === undefined) {
+    content = thinking;
+    thinking = '';
+  }
+
   const messages = elements.messageList.querySelectorAll('.message.assistant');
   const lastMessage = messages[messages.length - 1];
 
   if (lastMessage) {
     const bubble = lastMessage.querySelector('.message-bubble');
-    bubble.innerHTML = formatMessageContent(content);
+    let html = '';
+
+    // 如果有思考过程，添加可折叠的思考块
+    if (thinking) {
+      html += buildThinkingBlockHTML(thinking);
+    }
+
+    // 正式回答内容
+    html += formatMessageContent(content);
+    bubble.innerHTML = html;
     // 兼容：保存纯文本供外部读取
     updateLastAssistantMessage.displayText = content;
+
+    // 给思考块绑定折叠事件
+    if (thinking) {
+      const thinkBlock = bubble.querySelector('.thinking-block');
+      if (thinkBlock) {
+        thinkBlock.querySelector('.thinking-toggle').addEventListener('click', () => {
+          thinkBlock.classList.toggle('expanded');
+        });
+      }
+    }
 
     requestAnimationFrame(() => {
       elements.chatArea.scrollTop = elements.chatArea.scrollHeight;

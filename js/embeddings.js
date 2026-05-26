@@ -204,9 +204,9 @@ const ANSWER_PROMPT_TEMPLATE = `你是 gxaj 知识库的 AI 助手。请基于�
 {chunks}`;
 
 /**
- * 调用 NVIDIA LLM 生成回答
+ * 调用本地 LLM 生成回答（通过 proxy.js 的 /api/chat 接口）
  * @param {string} prompt - 提示词
- * @returns {Promise<string>} LLM 回复内容
+ * @returns {Promise<{thinking: string, content: string}>} LLM 回复（含思考过程）
  */
 async function callNvidiaLLM(prompt) {
   const response = await fetch(`${LLM_CONFIG.proxyURL}/api/chat`, {
@@ -225,7 +225,10 @@ async function callNvidiaLLM(prompt) {
   }
 
   const data = await response.json();
-  return data.content || '';
+  return {
+    thinking: data.thinking || '',
+    content: data.content || ''
+  };
 }
 
 /**
@@ -234,18 +237,24 @@ async function callNvidiaLLM(prompt) {
  * @param {Array} results - 搜索结果 [{text, score, index}]
  * @param {string} userQuery - 用户问题
  * @param {string[]} docNames - 文档名数组（与 results 一一对应）
- * @returns {Promise<string>} 生成的答案
+ * @returns {Promise<{thinking: string, content: string}>} 生成的答案（含思考过程）
  */
 async function buildAnswer(results, userQuery, docNames = []) {
   if (!results || results.length === 0) {
-    return `抱歉，我在知识库中没有找到与"${userQuery}"相关的内容。\n\n请尝试：\n- 更换关键词搜索\n- 联系管理员上传相关文档`;
+    return {
+      thinking: '',
+      content: `抱歉，我在知识库中没有找到与"${userQuery}"相关的内容。\n\n请尝试：\n- 更换关键词搜索\n- 联系管理员上传相关文档`
+    };
   }
 
   // 过滤低相似度结果
   const filtered = results.filter(r => r.score >= LLM_CONFIG.similarityThreshold);
 
   if (filtered.length === 0) {
-    return `抱歉，知识库中未找到与"${userQuery}"高度相关的内容。\n\n请尝试：\n- 更换关键词搜索\n- 使用更具体的描述\n- 联系管理员上传相关文档`;
+    return {
+      thinking: '',
+      content: `抱歉，知识库中未找到与"${userQuery}"高度相关的内容。\n\n请尝试：\n- 更换关键词搜索\n- 使用更具体的描述\n- 联系管理员上传相关文档`
+    };
   }
 
   // 构建来源引用信息
@@ -270,14 +279,17 @@ async function buildAnswer(results, userQuery, docNames = []) {
 
   // 调用 LLM 生成总结
   try {
-    const summary = await callNvidiaLLM(prompt);
+    const llmResult = await callNvidiaLLM(prompt);
 
     // 追加来源引用
     const sourceRef = sources.map((s, i) =>
       `[${i + 1}] ${s.docName}`
     ).join('  ');
 
-    return `${summary}\n\n---\n📚 来源引用：${sourceRef}\n💡 以上内容由 AI 基于知识库文档生成，如有疑问请查阅原始文档。`;
+    return {
+      thinking: llmResult.thinking,
+      content: `${llmResult.content}\n\n---\n📚 来源引用：${sourceRef}\n💡 以上内容由 AI 基于知识库文档生成，如有疑问请查阅原始文档。`
+    };
   } catch (llmErr) {
     console.warn('[Embedding] LLM 调用失败，降级为直接输出:', llmErr.message);
 
@@ -289,7 +301,7 @@ async function buildAnswer(results, userQuery, docNames = []) {
       answer += `📄 **相关内容 ${i + 1}**（相似度: ${(s.score * 100).toFixed(0)}%，来源: ${s.docName}）\n${text}\n\n`;
     });
     answer += `---\n💡 以上内容均来自知识库文档。注意：LLM 服务暂不可用，当前显示为原文摘要。`;
-    return answer;
+    return { thinking: '', content: answer };
   }
 }
 

@@ -121,11 +121,12 @@ app.post('/api/chat', async (req, res) => {
         console.log('[Proxy] 使用本地模型推理...');
 
         const response = await chatSession.prompt(prompt);
-        const cleaned = cleanModelOutput(response);
-        console.log('[Proxy] 本地模型响应成功');
+        const parsed = parseModelOutput(response);
+        console.log('[Proxy] 本地模型响应成功', parsed.thinking ? `(思考: ${parsed.thinking.length}字)` : '');
 
         return res.json({
-          content: cleaned,
+          thinking: parsed.thinking,
+          content: parsed.content,
           source: 'local-llama',
           model: MODEL_NAME
         });
@@ -181,19 +182,50 @@ app.post('/api/chat/stream', async (req, res) => {
 
     const prompt = messagesToPrompt(messages);
 
-    // 使用 generate() 的 on('chunk') 来获取流式输出
+    // 流式输出：分 thinking / content 两个阶段推送
     let fullResponse = '';
+    let phase = 'thinking'; // 'thinking' | 'content'
 
     try {
-      // node-llama-cpp 的流式处理
       await chatSession.prompt(prompt, {
         onTextChunk: (chunk) => {
           fullResponse += chunk;
-          res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+
+          // Qwen3 的思考标签
+          const THINK_START = '<' + 'think' + '>';  // open think tag
+          const THINK_END = '<' + '/think' + '>';  // close think tag
+
+          if (phase === 'thinking') {
+            // 检测 </think> 表示思考结束
+            if (fullResponse.includes(THINK_END)) {
+              phase = 'content';
+              // 提取完整思考内容
+              const parsed = parseModelOutput(fullResponse);
+              res.write(`data: ${JSON.stringify({ phase: 'thinking_done', thinking: parsed.thinking })}\n\n`);
+              // 推送思考后的正文
+              if (parsed.content) {
+                res.write(`data: ${JSON.stringify({ phase: 'content', chunk: parsed.content })}\n\n`);
+              }
+            } else {
+              // 还在思考中，提取并推送思考片段
+              const tIdx = fullResponse.indexOf(THINK_START);
+              if (tIdx !== -1) {
+                const thinkChunk = fullResponse.substring(tIdx + THINK_START.length);
+                if (thinkChunk) {
+                  res.write(`data: ${JSON.stringify({ phase: 'thinking', chunk: thinkChunk })}\n\n`);
+                }
+              }
+            }
+          } else {
+            // 已经进入回答阶段，直接推送内容
+            res.write(`data: ${JSON.stringify({ phase: 'content', chunk })}\n\n`);
+          }
         }
       });
 
-      res.write(`data: ${JSON.stringify({ done: true, content: cleanModelOutput(fullResponse) })}\n\n`);
+      // 最终完成，发送完整解析结果
+      const parsed = parseModelOutput(fullResponse);
+      res.write(`data: ${JSON.stringify({ phase: 'done', thinking: parsed.thinking, content: parsed.content })}\n\n`);
     } catch (err) {
       res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
     }
@@ -219,26 +251,48 @@ app.get('/api/stats', (req, res) => {
 // ─── 工具函数 ────────────────────────────────────────────────────────────────
 
 /**
- * 清理 Qwen3 模型输出中的特殊标签
- * Qwen3 可能输出 <|im_end|>、、</_answer> 等标签
+ * 解析 Qwen3 模型输出，提取思考过程和正式回答
+ * Qwen3 输出格式：正式回答内容
  */
-function cleanModelOutput(text) {
-  return text
+function parseModelOutput(text) {
+  let thinking = '';
+  let content = text;
+
+  // 提取 Qwen3 思考链
+  const openTag = '<' + 'think>';
+  const closeTag = '<' + '/think>';
+  const escapedOpen = openTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedClose = closeTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const thinkRegex = new RegExp(escapedOpen + '([\\s\\S]*?)' + escapedClose, 'i');
+  const thinkMatch = text.match(thinkRegex);
+
+  if (thinkMatch) {
+    thinking = thinkMatch[1].trim();
+    content = text.replace(thinkRegex, '').trim();
+  }
+
+  // 清理残留的特殊标签
+  content = content
     .replace(/<\|im_end\|>/g, '')
     .replace(/<\|im_start\|>.*?\n?/g, '')
-    .replace(/<\/?think>.*?<\/think>/gs, '')
     .replace(/<\/?answer>/g, '')
     .replace(/<\|[^|]*\|>/g, '')
     .trim();
-}
 
+  thinking = thinking
+    .replace(/<\|im_end\|>/g, '')
+    .replace(/<\|im_start\|>.*?\n?/g, '')
+    .replace(/<\|[^|]*\|>/g, '')
+    .trim();
+
+  return { thinking, content };
+}
 /**
  * 将消息数组转换为 prompt
  */
 function messagesToPrompt(messages) {
-  // 系统提示：/no_think 禁止 Qwen3 输出 <think> 思维链
+  // 系统提示：不使用 /no_think，允许 Qwen3 自由使用深度思考
   let prompt = `<|im_start|>system
-/no_think
 你是 gxaj 知识库的 AI 助手。请用以下风格回答问题：
 
 1. 像一个亲切的同事一样对话，自然流畅，不要像机器人在念稿
@@ -246,12 +300,14 @@ function messagesToPrompt(messages) {
 3. 如果需要分点说明，用"首先"、"另外"等连接，而不是冰冷地列 1.2.3.
 4. 遇到不确定的问题，坦诚说"这个我不太确定"，不要编造
 5. 回答简洁有力，不要废话，但也不能太简短让人摸不着头脑
-6. 最后如果合适，可以加一句关心的话<|im_end|>
+6. 最后如果合适，可以加一句关心的话
+7. 在回答之前，请先认真思考用户的问题，分析关键信息<|im_end|>
 `;
 
   // 添加历史消息
   for (const msg of messages) {
     const role = msg.role === 'user' ? 'user' : 'assistant';
+
     prompt += `<|im_start|>${role}\n${msg.content}<|im_end|>\n`;
   }
 
