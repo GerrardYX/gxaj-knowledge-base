@@ -393,8 +393,8 @@ async function sendToAI(userMessage) {
   elements.sendBtn.disabled = true;
   showTypingIndicator();
 
-  // 先追加一条空的 AI 消息 DOM
-  appendAssistantMessage('');
+  // 先追加一条空的 AI 消息 DOM（typing indicator 已包含头像，这里只创建消息结构）
+  appendAssistantMessage('', true);
 
   try {
     // 收集所有文档 chunks（含 embedding 的优先）
@@ -659,7 +659,7 @@ async function preloadEmbeddingModel() {
  * 在 DOM 中追加一条 AI 消息气泡（用于流式输出开始前预创建）
  * @param {string} content - 初始内容（流开始时为空）
  */
-function appendAssistantMessage(content) {
+function appendAssistantMessage(content, noAvatar = false) {
   const message = {
     role: 'assistant',
     content: content,
@@ -676,7 +676,7 @@ function appendAssistantMessage(content) {
   const div = document.createElement('div');
   div.className = 'message assistant';
   div.innerHTML = `
-    <div class="message-avatar">🤖</div>
+    ${noAvatar ? '' : '<div class="message-avatar">🤖</div>'}
     <div class="message-content">
       <div class="message-bubble">
         ${formatMessageContent(content)}

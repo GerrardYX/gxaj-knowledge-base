@@ -281,9 +281,10 @@ async function buildAnswer(results, userQuery, docNames = []) {
   try {
     const llmResult = await callNvidiaLLM(prompt);
 
-    // 追加来源引用
-    const sourceRef = sources.map((s, i) =>
-      `[${i + 1}] ${s.docName}`
+    // 追加来源引用（去重）
+    const uniqueDocNames = [...new Set(sources.map(s => s.docName))];
+    const sourceRef = uniqueDocNames.map((name, i) =>
+      `[${i + 1}] ${name}`
     ).join('  ');
 
     return {
