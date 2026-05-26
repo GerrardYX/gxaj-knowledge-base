@@ -9,7 +9,8 @@ const state = {
   messages: [],    // {role, content, time}
   isTyping: false,
   currentConversationId: null,  // 当前对话ID
-  isEmbeddingModelReady: false  // 本地 embedding 模型是否就绪
+  isEmbeddingModelReady: false,  // 本地 embedding 模型是否就绪
+  modelReadyNotified: false  // 模型就绪 toast 是否已弹出过
 };
 
 // ============ DOM 元素 ============
@@ -1586,7 +1587,11 @@ function updateModelProgressUI(status) {
     setTimeout(() => {
       container.classList.add('hidden');
     }, 2000);
-    showToast('AI模型加载完成', 'success');
+    // 只弹一次 toast，避免轮询重复通知
+    if (!state.modelReadyNotified) {
+      state.modelReadyNotified = true;
+      showToast('AI模型加载完成', 'success');
+    }
     return;
   }
 
