@@ -994,11 +994,7 @@ function openKnowledgePanel() {
 }
 
 function closeKnowledgePanel() {
-  const panel = elements.knowledgePanel;
-  panel.classList.add('closing');
-  panel.addEventListener('animationend', () => {
-    panel.classList.remove('active', 'closing');
-  }, { once: true });
+  elements.knowledgePanel.classList.remove('active');
 }
 
 /**
@@ -1524,10 +1520,7 @@ function showLoading(text = '加载中...') {
 }
 
 function hideLoading() {
-  elements.loadingOverlay.classList.add('hiding');
-  elements.loadingOverlay.addEventListener('animationend', () => {
-    elements.loadingOverlay.classList.remove('active', 'hiding');
-  }, { once: true });
+  elements.loadingOverlay.classList.remove('active');
 }
 
 function showToast(message, type = 'info') {
