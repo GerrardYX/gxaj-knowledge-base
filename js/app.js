@@ -69,6 +69,36 @@ function deleteConversation(id) {
 }
 
 /**
+ * 重命名对话
+ */
+function renameConversation(id) {
+  const conversations = getConversations();
+  const conv = conversations.find(c => c.id === id);
+  if (!conv) return;
+  const newTitle = prompt('重命名对话：', conv.title);
+  if (newTitle && newTitle.trim()) {
+    conv.title = newTitle.trim();
+    localStorage.setItem('gxaj_conversations', JSON.stringify(conversations));
+    loadConversationHistory();
+    showToast('已重命名', 'success');
+  }
+}
+
+/**
+ * 删除对话（包装函数，供侧边栏调用）
+ */
+function removeConversation(id) {
+  deleteConversation(id);
+  loadConversationHistory();
+  if (state.currentConversationId === id) {
+    state.currentConversationId = 'conv_' + Date.now();
+    state.messages = [];
+    renderMessages();
+  }
+  showToast('对话已删除', 'info');
+}
+
+/**
  * 加载对话历史列表到侧边栏
  */
 function loadConversationHistory() {
@@ -86,19 +116,23 @@ function loadConversationHistory() {
     return;
   }
   
-  const html = conversations.map(conv => `
+  const html = conversations.map(conv => {
+    const preview = conv.messages.length > 1 ? conv.messages[conv.messages.length - (conv.messages[conv.messages.length-1]?.role === 'user' ? 0 : 1)]?.content?.substring(0, 30) : '';
+    return `
     <div class="history-item ${conv.id === state.currentConversationId ? 'active' : ''}" 
          data-id="${conv.id}">
       <div class="history-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
       <div class="history-content" onclick="loadConversation('${conv.id}')">
         <div class="history-title">${escapeHtml(conv.title)}</div>
         <div class="history-time">${formatConversationTime(conv.updatedAt)}</div>
+        ${preview ? `<div class="history-preview">${escapeHtml(preview)}${preview.length >= 30 ? '...' : ''}</div>` : ''}
       </div>
       <div class="history-actions">
+        <button class="history-delete-btn" onclick="event.stopPropagation(); renameConversation('${conv.id}')" title="重命名"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
         <button class="history-delete-btn" onclick="event.stopPropagation(); removeConversation('${conv.id}')" title="删除对话"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
   
   historyContainer.innerHTML = html;
 }
@@ -260,6 +294,14 @@ function initApp() {
   initModelStatusListener();
 
   console.log('[App] 应用已初始化，无需登录');
+
+  // 首次使用提示
+  if (!localStorage.getItem('gxaj_first_visit')) {
+    setTimeout(() => {
+      showToast('👋 欢迎！点击左侧「知识库管理」上传文档开始使用', 'info');
+      localStorage.setItem('gxaj_first_visit', '1');
+    }, 1000);
+  }
 }
 
 // ============ 聊天相关 ============
@@ -998,6 +1040,14 @@ function closeKnowledgePanel() {
 }
 
 /**
+ * 加载示例文档（引导快速体验）
+ */
+window.loadSampleDoc = function() {
+  showToast('📝 请先上传知识库文档，系统将自动解析并构建索引', 'info');
+  openKnowledgePanel();
+};
+
+/**
  * 导出知识库（含预计算的 embedding）
  * 管理员可以将导出的 JSON 文件放入 assets/ 目录，重新打包分发给客户
  */
@@ -1262,22 +1312,39 @@ function handleDrop(e) {
 }
 
 async function processFiles(files) {
+  const totalFiles = files.length;
+  let processedFiles = 0;
+
+  // 显示面板内进度条
+  const progressEl = document.getElementById('uploadProgress');
+  const progressFill = document.getElementById('uploadProgressFill');
+  const progressText = document.getElementById('uploadProgressText');
+  const progressLabel = progressEl?.querySelector('.upload-progress-label');
+  const progressPercent = progressEl?.querySelector('.upload-progress-percent');
+  if (progressEl) progressEl.classList.add('active');
+
+  function updateProgress(percent, label, text) {
+    if (progressFill) progressFill.style.width = Math.min(percent, 100) + '%';
+    if (progressPercent) progressPercent.textContent = Math.round(percent) + '%';
+    if (progressLabel) progressLabel.textContent = label;
+    if (progressText) progressText.textContent = text || '';
+  }
+
   for (const file of files) {
     try {
-      showLoading(`📖 正在解析文件: ${file.name}`);
+      updateProgress((processedFiles / totalFiles) * 100, `解析文件 ${processedFiles + 1}/${totalFiles}`, file.name);
 
       // 1. 解析文档内容
       const content = await Parser.parseFile(file);
       console.log('[App] 文档解析完成，内容长度:', content.length, '字符');
-      console.log('[App] 内容预览:', content.substring(0, 200));
       
       const textChunks = Parser.splitTextIntoChunks(content);
       console.log('[App] 文本分块完成，块数:', textChunks.length);
 
       // 2. 计算每个 chunk 的 embedding 向量
-      showLoading(`🔢 正在计算文档向量 (0/${textChunks.length})...`);
+      updateProgress(20 + (processedFiles / totalFiles) * 30, `计算向量 (0/${textChunks.length})`, file.name);
 
-      // 预加载模型（如果还没加载）
+      // 预加载模型
       try {
         await Embeddings.loadModel();
       } catch (modelErr) {
@@ -1300,9 +1367,14 @@ async function processFiles(files) {
 
         chunksWithEmbedding.push({ text, embedding });
 
-        // 每10条更新一次进度
-        if ((i + 1) % 10 === 0 || i === textChunks.length - 1) {
-          showLoading(`🔢 正在计算文档向量 (${i + 1}/${textChunks.length})...`);
+        // 实时更新进度
+        const chunkProgress = 20 + ((i + 1) / textChunks.length) * 30;
+        if ((i + 1) % 5 === 0 || i === textChunks.length - 1) {
+          updateProgress(
+            20 + (processedFiles / totalFiles) * 30 + (i + 1) / textChunks.length * 30 / totalFiles,
+            `计算向量 (${i + 1}/${textChunks.length})`,
+            file.name
+          );
         }
       }
 
@@ -1329,9 +1401,17 @@ async function processFiles(files) {
       console.error('Parse error:', error);
       showToast(`❌ ${file.name}: ${error.message}`, 'error');
     }
+    
+    processedFiles++;
   }
 
-  hideLoading();
+  // 隐藏进度条
+  progressEl.classList.remove('active');
+  
+  // 完成提示
+  if (processedFiles > 0) {
+    showToast(`✅ 成功处理 ${processedFiles} 个文件`, 'success');
+  }
 }
 
 function renderFileList() {

@@ -210,6 +210,14 @@ html, body {
   margin-bottom: 20px;
 }
 
+.nav-section:not(:last-child)::after {
+  content: '';
+  display: block;
+  height: 1px;
+  background: var(--border-light);
+  margin: 16px 8px 0;
+}
+
 .nav-section-title {
   font-size: 10px;
   font-weight: 700;
@@ -218,6 +226,9 @@ html, body {
   letter-spacing: 1px;
   padding: 0 12px;
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .nav-item {
@@ -309,9 +320,20 @@ html, body {
 .history-title { font-size: 12.5px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
 .history-time { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
 
+.history-preview {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  opacity: 0.7;
+}
+
 .history-actions {
   display: flex;
   align-items: center;
+  gap: 2px;
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -553,6 +575,58 @@ html, body {
 .quick-action:active {
   transform: translateY(0);
   box-shadow: var(--shadow-xs);
+}
+
+/* 快捷引导卡片 */
+.suggestion-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 24px;
+  max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.suggestion-card {
+  padding: 14px 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: left;
+  box-shadow: var(--shadow-xs);
+}
+
+.suggestion-card:hover {
+  border-color: var(--accent-light);
+  background: var(--accent-bg);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.suggestion-card:active {
+  transform: translateY(0);
+}
+
+.suggestion-card-icon {
+  font-size: 18px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.suggestion-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.suggestion-card-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* 消息列表 */
@@ -1024,6 +1098,52 @@ html, body {
 .upload-zone p {
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* 上传进度条 */
+.upload-progress {
+  display: none;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.upload-progress.active {
+  display: block;
+}
+
+.upload-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.upload-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.upload-progress-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
 }
 
 /* 文件列表 */

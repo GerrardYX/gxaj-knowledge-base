@@ -116,6 +116,28 @@
               如何使用？
             </div>
           </div>
+          <div class="suggestion-cards" id="suggestionCards">
+            <div class="suggestion-card" onclick="openKnowledgePanel()">
+              <span class="suggestion-card-icon">📄</span>
+              <div class="suggestion-card-title">上传文档</div>
+              <div class="suggestion-card-desc">导入 .docx 或 .md 文件</div>
+            </div>
+            <div class="suggestion-card" onclick="loadSampleDoc()">
+              <span class="suggestion-card-icon">🚀</span>
+              <div class="suggestion-card-title">快速体验</div>
+              <div class="suggestion-card-desc">加载示例知识库文档</div>
+            </div>
+            <div class="suggestion-card" onclick="elements.messageInput.focus(); elements.messageInput.value='这个知识库支持哪些功能？'; handleSendMessage();">
+              <span class="suggestion-card-icon">💡</span>
+              <div class="suggestion-card-title">功能介绍</div>
+              <div class="suggestion-card-desc">了解支持的功能特性</div>
+            </div>
+            <div class="suggestion-card" onclick="elements.messageInput.focus(); elements.messageInput.value='支持的文档格式有哪些，如何使用？'; handleSendMessage();">
+              <span class="suggestion-card-icon">📖</span>
+              <div class="suggestion-card-title">使用指南</div>
+              <div class="suggestion-card-desc">查看详细使用说明</div>
+            </div>
+          </div>
         </div>
         
         <!-- 消息列表 -->
@@ -126,11 +148,11 @@
       <div id="inputArea" class="input-area">
         <div class="input-container">
           <div class="input-wrapper">
-            <textarea 
-              id="messageInput" 
-              placeholder="输入问题，按 Enter 发送..."
-              rows="1"
-            ></textarea>
+              <textarea 
+                id="messageInput" 
+                placeholder="输入问题，例如「知识库中有哪些内容？」..."
+                rows="1"
+              ></textarea>
             <div class="input-actions">
               <button id="sendBtn" class="send-btn" title="发送">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -171,6 +193,18 @@
           <h4>点击或拖拽上传文件</h4>
           <p>支持 .docx 和 .md 格式</p>
           <input type="file" id="fileInput" accept=".docx,.md,.markdown" multiple style="display: none;">
+        </div>
+        
+        <!-- 上传进度 -->
+        <div id="uploadProgress" class="upload-progress">
+          <div class="upload-progress-header">
+            <span class="upload-progress-label">正在上传...</span>
+            <span class="upload-progress-percent">0%</span>
+          </div>
+          <div class="upload-progress-bar">
+            <div id="uploadProgressFill" class="upload-progress-fill" style="width:0%"></div>
+          </div>
+          <div class="upload-progress-text" id="uploadProgressText">准备中...</div>
         </div>
         
         <!-- 文件列表 -->
