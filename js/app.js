@@ -357,7 +357,7 @@ function initApp() {
   console.log('[App] 应用已初始化，无需登录');
 
   // 恢复低性能模式设置
-  restorePerfModeSetting();
+  restorePerfModeSetting().catch(e => console.warn('[App] 恢复性能设置失败:', e));
 
   // 首次使用提示
   if (!localStorage.getItem('gxaj_first_visit')) {
@@ -979,14 +979,19 @@ function autoResizeTextarea() {
 async function handleNewChat() {
   // 保存当前对话（如果有消息）
   if (state.messages.length > 0 && state.currentConversationId) {
-    await saveConversation(state.currentConversationId, state.messages);
+    try {
+      await saveConversation(state.currentConversationId, state.messages);
+    } catch (e) {
+      console.warn('[App] 保存对话失败，继续新建:', e);
+      // 不阻断用户操作
+    }
   }
   
   // 生成新对话ID
   state.currentConversationId = 'conv_' + Date.now();
   state.messages = [];
   renderMessages();
-  loadConversationHistory();
+  loadConversationHistory().catch(e => console.warn('[App] 加载历史失败:', e));
   elements.messageInput.focus();
 }
 
@@ -1110,6 +1115,23 @@ function updateThemeIcon() {
 }
 
 // ============ 知识库相关 ============
+
+/**
+ * 切换知识库面板（支持参数控制打开/关闭，供欢迎页快捷按钮调用）
+ */
+window.toggleKnowledgePanel = function(forceOpen) {
+  if (forceOpen) {
+    openKnowledgePanel();
+  } else {
+    // 如果当前已打开则关闭，否则打开
+    if (elements.knowledgePanel.classList.contains('active')) {
+      closeKnowledgePanel();
+    } else {
+      openKnowledgePanel();
+    }
+  }
+};
+
 function openKnowledgePanel() {
   // 所有人可用知识库管理功能
   elements.knowledgePanel.classList.add('active');
@@ -1534,7 +1556,12 @@ async function processFiles(files) {
   }
 
   // 隐藏进度条
-  progressEl.classList.remove('active');
+  if (progressEl) progressEl.classList.remove('active');
+
+  // 重置文件输入，允许重新上传相同文件
+  if (elements.fileInput) {
+    elements.fileInput.value = '';
+  }
   
   // 完成提示
   if (processedFiles > 0) {
@@ -1694,8 +1721,11 @@ function handleClearKnowledge() {
 
 function updateKnowledgeStatus() {
   const count = state.documents.length;
-  const btn = elements.knowledgeBtn;
-  
+  // 兼容：优先用 knowledgeBtn（侧边栏旧版），回退到 knowledgeToggleBtn（顶栏）
+  const btn = elements.knowledgeBtn || elements.knowledgeToggleBtn;
+
+  if (!btn) return;  // 安全防护：元素不存在则跳过
+
   if (count > 0) {
     btn.innerHTML = `📚 知识库 (${count})`;
     btn.classList.add('has-docs');
