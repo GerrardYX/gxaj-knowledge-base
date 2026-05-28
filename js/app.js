@@ -530,12 +530,11 @@ function removeTypingIndicator() {
 async function sendToAI(userMessage) {
   state.isTyping = true;
   elements.sendBtn.disabled = true;
-  showTypingIndicator();
 
   // 记录当前用户问题（用于重新生成功能）
   state.lastUserQuery = userMessage;
 
-  // 显示打字指示器（不额外创建空消息，避免出现"对话框+细长条"双重元素）
+  // 显示打字指示器（只调用一次！）
   showTypingIndicator();
 
   try {
@@ -1369,8 +1368,21 @@ function loadDocuments() {
   if (window.DB && DB.DocsDB) {
     DB.DocsDB.loadAll().then(docs => {
       if (docs.length > 0) {
-        state.documents = docs;
-        console.log('[Load] 从 IndexedDB 恢复了', docs.length, '个文档');
+        // 自动去重：加载时清除历史残留的重复文档（同名只保留最后一份）
+        const beforeCount = docs.length;
+        const seen = new Map();
+        state.documents = docs.filter(doc => {
+          const key = doc.name.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.set(key, true);
+          return true;
+        });
+        if (state.documents.length < beforeCount) {
+          console.log(`[Load] IndexedDB去重: ${beforeCount} → ${state.documents.length}（移除 ${beforeCount - state.documents.length} 份重复）`);
+          DB.DocsDB.save(state.documents).catch(e => console.warn('[Load] 去重保存失败:', e));
+        }
+
+        console.log('[Load] 从 IndexedDB 恢复了', state.documents.length, '个文档');
         renderFileList();
         updateKnowledgeStatus();
         preloadEmbeddingModel();
@@ -1403,6 +1415,22 @@ function loadFromLocalStorageFallback() {
             embedding: c.embedding ? new Float32Array(c.embedding) : null
           }))
         }));
+
+        // 自动去重：加载时清除历史残留的重复文档（同名只保留最后一份）
+        const beforeCount = state.documents.length;
+        const seen = new Map();
+        state.documents = state.documents.filter(doc => {
+          const key = doc.name.toLowerCase();
+          if (seen.has(key)) return false; // 已存在同名，丢弃旧/重复的
+          seen.set(key, true);
+          return true;
+        });
+        if (state.documents.length < beforeCount) {
+          console.log(`[Load] 去重: ${beforeCount} → ${state.documents.length} 个文档（移除 ${beforeCount - state.documents.length} 份重复）`);
+          // 立即保存清理后的数据，覆盖脏数据
+          saveDocuments();
+        }
+
         console.log('[Load] 从 localStorage 恢复了', state.documents.length, '个文档（将迁移到 IndexedDB）');
 
         // 异步迁移到 IndexedDB
