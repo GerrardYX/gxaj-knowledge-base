@@ -44,13 +44,35 @@ let modelReady = false;
 let modelLoading = false;
 let modelError = null;
 
+// ─── IPC 通知（如果 Electron 可用）──────────────────────────────────────────
+function notifyRenderer(channel, data) {
+  try {
+    // 尝试通过 Electron IPC 发送通知
+    const { BrowserWindow } = require('electron');
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length > 0) {
+      windows[0].webContents.send(channel, data);
+    }
+  } catch {
+    // 非 Electron 环境，忽略
+  }
+}
+
 // ─── node-llama-cpp 初始化 ──────────────────────────────────────────────────
 async function initModel() {
   if (modelReady || modelLoading) return;
 
   modelLoading = true;
+  modelError = null;
   console.log('[Model] 正在初始化本地模型...');
   console.log(`[Model] 模型路径: ${MODEL_PATH}`);
+
+  // 通知渲染进程：开始加载
+  notifyRenderer('model-progress', {
+    status: 'loading',
+    message: '正在加载向量模型...',
+    progress: 0
+  });
 
   try {
     // 动态导入 node-llama-cpp
@@ -59,12 +81,26 @@ async function initModel() {
     // 初始化 llama.cpp 运行时
     llama = await getLlama();
 
+    // 通知进度
+    notifyRenderer('model-progress', {
+      status: 'loading',
+      message: '正在加载模型文件（首次可能需要几分钟）...',
+      progress: 30
+    });
+
     // 加载模型
     console.log('[Model] 加载 GGUF 模型（首次可能需要几分钟）...');
     chatModel = await llama.loadModel({
       modelPath: MODEL_PATH,
       // 对于 4GB RAM 机器，限制上下文长度
       contextSize: 512,  // 4GB RAM 友好
+    });
+
+    // 通知进度
+    notifyRenderer('model-progress', {
+      status: 'loading',
+      message: '正在创建推理上下文...',
+      progress: 70
     });
 
     // 创建会话
@@ -77,11 +113,39 @@ async function initModel() {
     modelLoading = false;
     console.log('[Model] ✅ 模型加载完成');
 
+    // 通知渲染进程：模型就绪
+    notifyRenderer('model-status', {
+      ready: true,
+      loading: false,
+      model: MODEL_NAME,
+      error: null
+    });
+
+    notifyRenderer('model-progress', {
+      status: 'ready',
+      message: '模型加载完成，可以开始对话',
+      progress: 100
+    });
+
   } catch (err) {
     modelLoading = false;
     modelError = err.message;
     console.error('[Model] ❌ 模型加载失败:', err.message);
     console.error('[Model] 将降级到 NVIDIA API');
+
+    // 通知渲染进程：加载失败
+    notifyRenderer('model-status', {
+      ready: false,
+      loading: false,
+      model: MODEL_NAME,
+      error: err.message
+    });
+
+    notifyRenderer('model-progress', {
+      status: 'error',
+      message: `模型加载失败: ${err.message}`,
+      progress: 0
+    });
   }
 }
 
@@ -139,7 +203,7 @@ app.post('/api/chat', async (req, res) => {
         return res.status(500).json({
           error: '本地模型推理失败',
           detail: localErr.message,
-          hint: '请重启应用'
+          hint: '请重启应用或检查模型文件是否完整'
         });
       }
     }
@@ -148,13 +212,13 @@ app.post('/api/chat', async (req, res) => {
     if (modelLoading) {
       return res.status(503).json({
         error: '模型正在加载中，请稍候',
-        hint: '模型首次加载需要 1-2 分钟'
+        hint: '模型首次加载需要 1-2 分钟，请耐心等待'
       });
     }
 
     return res.status(503).json({
       error: '本地模型未就绪',
-      hint: '请确保模型文件已正确安装'
+      hint: '请确保模型文件已正确安装，或检查 proxy.js 是否正常运行'
     });
 
   } catch (err) {
@@ -178,7 +242,7 @@ app.post('/api/chat/stream', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
 
     if (!modelReady || !chatSession) {
-      res.write(`data: ${JSON.stringify({ error: '模型未就绪' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: '模型未就绪，请稍后再试' })}\n\n`);
       res.end();
       return;
     }
@@ -199,7 +263,7 @@ app.post('/api/chat/stream', async (req, res) => {
           const THINK_END = '<' + '/think' + '>';  // close think tag
 
           if (phase === 'thinking') {
-            // 检测 </think> 表示思考结束
+            // 检测  response 表示思考结束
             if (fullResponse.includes(THINK_END)) {
               phase = 'content';
               // 提取完整思考内容
@@ -290,6 +354,7 @@ function parseModelOutput(text) {
 
   return { thinking, content };
 }
+
 /**
  * 将消息数组转换为 prompt
  */
@@ -305,7 +370,7 @@ function messagesToPrompt(messages) {
 5. 回答简洁有力，不要废话，但也不能太简短让人摸不着头脑
 6. 最后如果合适，可以加一句关心的话
 7. 在回答之前，请先认真思考用户的问题，分析关键信息
-8. 思考过程请用 <think> 和 </think> 标签包裹，例如：<think>这里写你的分析过程</think><|im_end|>
+8. 思考过程请用  thinking 和  response 标签包裹，例如： thinking这里写你的分析过程 response<|im_end|>
 `;
 
   // 添加历史消息
