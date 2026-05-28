@@ -223,17 +223,27 @@ window.removeConversation = async function(id) {
 
 // ============ 初始化 ============
 document.addEventListener('DOMContentLoaded', () => {
-  initElements();
-  initEventListeners();
-  
-  // 直接初始化应用（无需登录）
-  state.currentUser = { displayName: '用户' };  // 兼容性设置
-  initApp();
-  
-  // 页面卸载时清理定时器，防止内存泄漏
-  window.addEventListener('beforeunload', () => {
-    stopConnectionTimer();
-  });
+  try {
+    initElements();
+    initEventListeners();
+
+    // 直接初始化应用（无需登录）
+    state.currentUser = { displayName: '用户' };  // 兼容性设置
+    initApp();
+
+    // 页面卸载时清理定时器，防止内存泄漏
+    window.addEventListener('beforeunload', () => {
+      stopConnectionTimer();
+    });
+  } catch (err) {
+    console.error('[App] 初始化失败:', err);
+    // 尝试在控制台展示错误信息
+    document.body.innerHTML += `
+      <div style="position:fixed;top:0;left:0;right:0;background:#ff4444;color:white;padding:12px;text-align:center;z-index:99999;font-family:system-ui;">
+        ⚠️ 应用初始化失败: ${err.message}
+        <br><small>请按 F12 打开开发者工具查看详情</small>
+      </div>`;
+  }
 });
 
 function initElements() {
@@ -265,7 +275,8 @@ function initElements() {
 
     // 其他
     newChatBtn: document.getElementById('newChatBtn'),
-    knowledgeBtn: document.getElementById('knowledgeBtn'),
+    // 兼容：HTML 实际 id 为 knowledgeToggleBtn（顶栏），旧版 knowledgeBtn 已移除
+    knowledgeBtn: document.getElementById('knowledgeBtn') || document.getElementById('knowledgeToggleBtn'),
     clearKnowledgeBtn: document.getElementById('clearKnowledgeBtn'),
     loadingOverlay: document.getElementById('loadingOverlay'),
     loadingText: document.getElementById('loadingText'),
@@ -312,10 +323,10 @@ function initEventListeners() {
   elements.uploadZone.addEventListener('drop', handleDrop);
   elements.fileInput.addEventListener('change', handleFileSelect);
   
-  // 按钮事件
-  elements.newChatBtn.addEventListener('click', handleNewChat);
-  elements.knowledgeBtn.addEventListener('click', openKnowledgePanel);
-  elements.clearKnowledgeBtn.addEventListener('click', handleClearKnowledge);
+  // 按钮事件（安全防护：防止元素不存在时崩溃）
+  if (elements.newChatBtn) elements.newChatBtn.addEventListener('click', handleNewChat);
+  if (elements.knowledgeBtn) elements.knowledgeBtn.addEventListener('click', openKnowledgePanel);
+  if (elements.clearKnowledgeBtn) elements.clearKnowledgeBtn.addEventListener('click', handleClearKnowledge);
   
   // 主题切换
   initTheme();
