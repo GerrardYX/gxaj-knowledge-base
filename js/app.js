@@ -470,11 +470,19 @@ function renderMessages() {
 }
 
 function formatMessageContent(content) {
-  // 处理换行，同时保留已有的 source-tag 标签（来自 formatContentWithSourceTags）
+  // 处理换行，同时保留已有的 HTML 标签（来自 formatContentWithSourceTags 等）
   return content.split('\n').map(line => {
-    if (line.includes('class="source-tag"')) {
+    // 检测是否为 HTML 行：包含 source-tag、source-tags-row、或任何 <tag ...> 结构
+    const isHtmlLine =
+      line.includes('class="source-tag"') ||
+      line.includes('class="source-tags-row"') ||
+      line.includes('class="thinking-block"') ||
+      /^<(\/?)(div|span|p|ul|ol|li|a|br|hr|img|code|pre|blockquote|strong|em|b|i|table|tr|td|th)\b/i.test(line.trim());
+    if (isHtmlLine) {
       return line; // 已是 HTML 标签，原样保留
     }
+    // 空行不包裹 <p>
+    if (!line.trim()) return '';
     return `<p>${escapeHtml(line)}</p>`;
   }).join('');
 }
@@ -527,8 +535,8 @@ async function sendToAI(userMessage) {
   // 记录当前用户问题（用于重新生成功能）
   state.lastUserQuery = userMessage;
 
-  // 先追加一条空的 AI 消息 DOM（typing indicator 已包含头像，这里只创建消息结构）
-  appendAssistantMessage('', true);
+  // 显示打字指示器（不额外创建空消息，避免出现"对话框+细长条"双重元素）
+  showTypingIndicator();
 
   try {
     // 收集所有文档 chunks（含 embedding 的优先）
@@ -866,8 +874,15 @@ function buildThinkingBlockHTML(thinking) {
  */
 function showThinkingAnimation(thinking, duration = 2000) {
   return new Promise((resolve) => {
-    const messages = elements.messageList.querySelectorAll('.message.assistant');
-    const lastMessage = messages[messages.length - 1];
+    let messages = elements.messageList.querySelectorAll('.message.assistant');
+    let lastMessage = messages[messages.length - 1];
+
+    // 如果不存在 AI 消息元素（typing indicator 被移除后），先创建一个
+    if (!lastMessage) {
+      appendAssistantMessage('');
+      messages = elements.messageList.querySelectorAll('.message.assistant');
+      lastMessage = messages[messages.length - 1];
+    }
     if (!lastMessage) { resolve(); return; }
 
     const bubble = lastMessage.querySelector('.message-bubble');
@@ -928,8 +943,15 @@ function updateLastAssistantMessage(thinking, content) {
     thinking = '';
   }
 
-  const messages = elements.messageList.querySelectorAll('.message.assistant');
-  const lastMessage = messages[messages.length - 1];
+  let messages = elements.messageList.querySelectorAll('.message.assistant');
+  let lastMessage = messages[messages.length - 1];
+
+  // 如果不存在 AI 消息元素（typing indicator 被移除后），先创建一个
+  if (!lastMessage) {
+    appendAssistantMessage('');
+    messages = elements.messageList.querySelectorAll('.message.assistant');
+    lastMessage = messages[messages.length - 1];
+  }
 
   if (lastMessage) {
     const bubble = lastMessage.querySelector('.message-bubble');
@@ -1548,6 +1570,17 @@ async function processFiles(files) {
         uploadedAt: new Date().toISOString(),
         chunkCount: textChunks.length
       };
+
+      // 去重检查：同名文档不重复添加
+      const isDuplicate = state.documents.some(
+        d => d.name.toLowerCase() === file.name.toLowerCase()
+      );
+      if (isDuplicate) {
+        showToast(`⚠️ 「${file.name}」已存在，跳过重复上传`, 'warning');
+        console.log('[App] 跳过重复文档:', file.name);
+        processedFiles++;
+        continue;
+      }
 
       state.documents.push(doc);
       saveDocuments();
