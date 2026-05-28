@@ -7,12 +7,12 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>gxaj知识库 - 智能问答系统</title>
-  <link rel="stylesheet" href="css/style.css?v=2.1">
+  <link rel="stylesheet" href="css/style.css?v=3.0">
 </head>
 <body>
-  <!-- ========== 主应用（直接显示，无需登录） ========== -->
+  <!-- ========== 主应用 ========== -->
   <div id="appContainer" class="app-container active">
-    <!-- 侧边栏 -->
+    <!-- 1. 侧边栏 (左) -->
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">
@@ -33,12 +33,6 @@
             </span>
             <span>新建对话</span>
           </div>
-          <div class="nav-item" id="knowledgeBtn">
-            <span class="icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            </span>
-            <span>知识库管理</span>
-          </div>
         </div>
         
         <div class="nav-section">
@@ -51,8 +45,8 @@
         </div>
         
         <div class="nav-section">
-          <div class="nav-section-title">说明</div>
-          <div class="nav-item" onclick="alert('📖 使用说明：\n\n1. 点击「知识库管理」上传文档\n2. 支持 Word (.docx) 和 Markdown (.md) 格式\n3. 上传完成后，在底部输入问题\n4. 系统会基于知识库内容回答\n5. 对话会自动保存到历史记录')">
+          <div class="nav-section-title">帮助</div>
+          <div class="nav-item" onclick="alert('📖 使用说明：\n\n1. 点击右侧「知识库」图标上传文档\n2. 支持 Word (.docx) 和 Markdown (.md) 格式\n3. 上传完成后直接开始提问\n4. 引用标签可点击查看原文')">
             <span class="icon">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </span>
@@ -63,22 +57,21 @@
       
       <div class="sidebar-footer">
         <div class="app-info">
-          <div class="app-version">v1.0.0</div>
+          <div class="app-version">v2.0 (UX+IndexedDB)</div>
         </div>
       </div>
     </aside>
     
-    <!-- 主内容区 -->
+    <!-- 2. 主内容区 (中) -->
     <main class="main-content">
       <!-- 顶部栏 -->
       <header class="chat-header">
-        <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleSidebar()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
-        <h2>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-          智能问答
-        </h2>
+        <div class="header-left">
+          <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleSidebar()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <h2>智能问答</h2>
+        </div>
         <div class="header-actions">
           <button class="theme-toggle" id="themeToggle" title="切换主题">
             <svg class="theme-icon-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -86,10 +79,13 @@
           </button>
           <div id="connectionStatus" class="connection-status">
             <span class="status-dot"></span>
-            <span class="status-text">检查连接...</span>
+            <span class="status-text">就绪</span>
           </div>
-          <button class="btn btn-secondary" id="clearKnowledgeBtn">
-            🗑️ 清空知识库
+          <button class="icon-btn" id="knowledgeToggleBtn" title="管理知识库">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </button>
+          <button class="icon-btn" id="perfModeToggle" title="低性能模式（关闭动画/模糊/阴影）">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           </button>
         </div>
       </header>
@@ -108,70 +104,15 @@
             </svg>
           </div>
           <h3>欢迎使用 gxaj知识库</h3>
-          <p>我是基于知识库的智能问答助手，请先上传知识库文档，然后开始提问。</p>
+          <p>我是您的本地智能助理。您可以直接提问，或点击右侧图标管理知识库文档。</p>
           <div class="quick-actions">
-            <div class="quick-action" onclick="openKnowledgePanel()">
+            <div class="quick-action" onclick="toggleKnowledgePanel(true)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              上传知识库文档
+              管理知识库文档
             </div>
-            <div class="quick-action" onclick="elements.messageInput.focus(); elements.messageInput.value='有哪些上传文档的方法？'; handleSendMessage();">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              如何使用？
-            </div>
-          </div>
-          <div class="suggestion-cards" id="suggestionCards">
-            <div class="suggestion-card" onclick="openKnowledgePanel()">
-              <span class="suggestion-card-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="rgba(37,99,235,0.08)" stroke="#2563eb"/>
-                  <polyline points="14 2 14 8 20 8" fill="none" stroke="#2563eb"/>
-                  <line x1="12" y1="18" x2="12" y2="12" stroke="#2563eb" stroke-width="2"/>
-                  <polyline points="9 15 12 12 15 15" fill="none" stroke="#2563eb" stroke-width="1.5"/>
-                  <path d="M4 14l4-1" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="2 2"/>
-                  <path d="M4 17l3-1" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="2 2"/>
-                </svg>
-              </span>
-              <div class="suggestion-card-title">上传文档</div>
-              <div class="suggestion-card-desc">导入 .docx 或 .md 文件</div>
-            </div>
-            <div class="suggestion-card" onclick="loadSampleDoc()">
-              <span class="suggestion-card-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2l2.5 5.5L20 9l-4 3.5L17 19l-5-3-5 3 1-6.5L4 9l5.5-1.5z" fill="rgba(37,99,235,0.08)" stroke="#2563eb"/>
-                  <path d="M8 14c-1.5 3.5 1 6 4 5" stroke="#2563eb" stroke-width="1.2" opacity="0.5"/>
-                  <line x1="16" y1="7" x2="19" y2="4" stroke="#94a3b8" stroke-width="1.2" opacity="0.6"/>
-                  <line x1="17" y1="8" x2="20" y2="7" stroke="#94a3b8" stroke-width="1.2" opacity="0.4"/>
-                </svg>
-              </span>
-              <div class="suggestion-card-title">快速体验</div>
-              <div class="suggestion-card-desc">加载示例知识库文档</div>
-            </div>
-            <div class="suggestion-card" onclick="elements.messageInput.focus(); elements.messageInput.value='这个知识库支持哪些功能？'; handleSendMessage();">
-              <span class="suggestion-card-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9 18h6" stroke="#2563eb"/>
-                  <path d="M10 22h4" stroke="#2563eb" stroke-width="1.5"/>
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" fill="rgba(37,99,235,0.08)" stroke="#2563eb"/>
-                  <path d="M9 14c0 1.5.5 2 1.5 2h3c1 0 1.5-.5 1.5-2" stroke="#f59e0b" stroke-width="1.2" opacity="0.7"/>
-                  <circle cx="12" cy="9" r="1.5" fill="#f59e0b" opacity="0.4"/>
-                </svg>
-              </span>
-              <div class="suggestion-card-title">功能介绍</div>
-              <div class="suggestion-card-desc">了解支持的功能特性</div>
-            </div>
-            <div class="suggestion-card" onclick="elements.messageInput.focus(); elements.messageInput.value='支持的文档格式有哪些，如何使用？'; handleSendMessage();">
-              <span class="suggestion-card-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" fill="rgba(37,99,235,0.08)" stroke="#2563eb"/>
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" fill="rgba(37,99,235,0.08)" stroke="#2563eb"/>
-                  <line x1="8" y1="7" x2="16" y2="7" stroke="#2563eb" stroke-width="1.2" opacity="0.6"/>
-                  <line x1="8" y1="10" x2="14" y2="10" stroke="#94a3b8" stroke-width="1.2" opacity="0.5"/>
-                  <line x1="8" y1="13" x2="12" y2="13" stroke="#94a3b8" stroke-width="1.2" opacity="0.4"/>
-                  <rect x="8" y="15" width="4" height="2" rx="0.5" fill="#2563eb" opacity="0.15"/>
-                </svg>
-              </span>
-              <div class="suggestion-card-title">使用指南</div>
-              <div class="suggestion-card-desc">查看详细使用说明</div>
+            <div class="quick-action" onclick="loadSampleDoc()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.5 5.5L20 9l-4 3.5L17 19l-5-3-5 3 1-6.5L4 9l5.5-1.5z"/></svg>
+              加载示例文档
             </div>
           </div>
         </div>
@@ -179,14 +120,31 @@
         <!-- 消息列表 -->
         <div id="messageList" class="message-list"></div>
       </div>
+
+      <!-- 检索状态气泡（可视化检索过程） -->
+      <div id="searchStatusBubble" class="search-status-bubble hidden">
+        <div class="search-status-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </div>
+        <div class="search-status-body">
+          <span id="searchStatusText" class="search-status-text">正在检索知识库...</span>
+          <div id="searchStatusDetail" class="search-status-detail"></div>
+        </div>
+      </div>
       
       <!-- 输入区域 -->
       <div id="inputArea" class="input-area">
         <div class="input-container">
+          <div id="stopGenerationContainer" class="stop-generation-container hidden">
+            <button id="stopGenerationBtn" class="btn btn-secondary btn-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              停止生成
+            </button>
+          </div>
           <div class="input-wrapper">
               <textarea 
                 id="messageInput" 
-                placeholder="输入问题，例如「知识库中有哪些内容？」..."
+                placeholder="输入问题..."
                 rows="1"
                 autofocus
               ></textarea>
@@ -200,73 +158,62 @@
             </div>
           </div>
           <div class="input-hint">
-            💡 提示：请先上传知识库文档，系统将基于文档内容回答
+            💡 本地模型驱动 · 知识库问答
           </div>
         </div>
       </div>
     </main>
-  </div>
 
-  <!-- ========== 知识库管理面板 ========== -->
-  <div id="knowledgePanel" class="panel-overlay">
-    <div class="panel">
-        <div class="panel-header">
-          <h3>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            知识库管理
-          </h3>
-          <div class="panel-header-actions">
-            <button class="btn btn-secondary" id="exportKnowledgeBtn" title="导出知识库（含向量数据）" style="font-size: 12px; padding: 6px 12px;">📦 导出</button>
-            <button class="panel-close" id="closeKnowledgePanel">✕</button>
-          </div>
-        </div>
+    <!-- 3. 知识库侧边面板 (右) -->
+    <aside id="knowledgePanel" class="knowledge-sidebar">
+      <div class="sidebar-header">
+        <h3>知识库管理</h3>
+        <button class="icon-btn-sm" id="closeKnowledgePanel" title="收起">✕</button>
+      </div>
       
-      <div class="panel-body">
+      <div class="sidebar-content">
         <!-- 上传区域 -->
-        <div id="uploadZone" class="upload-zone">
-          <div class="upload-icon">
-            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div id="uploadZone" class="upload-zone-compact">
+          <div class="upload-icon-sm">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           </div>
-          <h4>点击或拖拽上传文件</h4>
-          <p>支持 .docx 和 .md 格式</p>
+          <p>拖拽或点击上传</p>
           <input type="file" id="fileInput" accept=".docx,.md,.markdown" multiple style="display: none;">
         </div>
         
         <!-- 上传进度 -->
-        <div id="uploadProgress" class="upload-progress">
+        <div id="uploadProgress" class="upload-progress-compact">
           <div class="upload-progress-header">
-            <span class="upload-progress-label">正在上传...</span>
             <span class="upload-progress-percent">0%</span>
           </div>
           <div class="upload-progress-bar">
             <div id="uploadProgressFill" class="upload-progress-fill" style="width:0%"></div>
           </div>
-          <div class="upload-progress-text" id="uploadProgressText">准备中...</div>
         </div>
         
-        <!-- 文件列表 -->
-        <div id="fileList" class="file-list">
-          <div style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
-            <p>📂 暂无知识库文档</p>
-            <p style="margin-top: 8px; font-size: 13px;">点击上方区域或拖拽文件上传</p>
-          </div>
+        <!-- 文档列表 -->
+        <div class="file-list-header">
+          <span>我的文档</span>
+          <button id="clearKnowledgeBtn" class="text-btn-sm">清空</button>
         </div>
-        
-        <!-- 调试工具 -->
-        <div id="debugTools" style="margin-top: 20px; padding: 16px; background: var(--bg-secondary); border-radius: var(--radius); display: none;">
-          <h4 style="margin-bottom: 12px; font-size: 14px;">🔧 调试工具</h4>
-          <div style="margin-bottom: 12px;">
-            <input type="text" id="debugSearchInput" placeholder="输入测试关键词..." style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary);">
+        <div id="fileList" class="file-list-compact">
+          <div class="empty-state">暂无文档</div>
+        </div>
+
+        <!-- 文档预览区（点击文件名后显示） -->
+        <div id="docPreviewArea" class="doc-preview-area hidden">
+          <div class="doc-preview-header">
+            <span id="docPreviewTitle" class="doc-preview-title">文档预览</span>
+            <button class="icon-btn-sm" onclick="closeDocPreview()">✕</button>
           </div>
-          <button onclick="testSearch()" class="btn btn-primary" style="width: 100%; margin-bottom: 12px;">测试搜索</button>
-          <div id="debugSearchResults" style="max-height: 200px; overflow-y: auto; font-size: 12px;"></div>
-          <details style="margin-top: 12px;">
-            <summary style="cursor: pointer; color: var(--text-muted); font-size: 12px;">查看文档内容</summary>
-            <pre id="debugDocContent" style="margin-top: 8px; padding: 8px; background: var(--bg-base); border-radius: var(--radius-sm); max-height: 300px; overflow-y: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all;"></pre>
-          </details>
+          <div id="docPreviewContent" class="doc-preview-content"></div>
         </div>
       </div>
-    </div>
+
+      <div class="sidebar-footer-actions">
+        <button class="btn btn-secondary btn-full" id="exportKnowledgeBtn">📦 导出知识库</button>
+      </div>
+    </aside>
   </div>
 
   <!-- ========== 加载遮罩 ========== -->
@@ -300,10 +247,27 @@
   <!-- ========== 移动端侧边栏遮罩 ========== -->
   <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
+  <!-- ========== 来源引用弹窗 ========== -->
+  <div id="sourceRefModal" class="source-ref-modal hidden">
+    <div class="source-ref-modal-overlay" onclick="closeSourceRefModal()"></div>
+    <div class="source-ref-modal-content">
+      <div class="source-ref-modal-header">
+        <span id="sourceRefTitle" class="source-ref-modal-title">来源原文</span>
+        <button class="icon-btn-sm" onclick="closeSourceRefModal()">✕</button>
+      </div>
+      <div id="sourceRefBody" class="source-ref-modal-body"></div>
+      <div id="sourceRefFooter" class="source-ref-modal-footer">
+        <span id="sourceRefMeta" class="source-ref-meta"></span>
+      </div>
+    </div>
+  </div>
+
   <!-- 脚本 -->
+  <!-- 新增 IndexedDB 存储模块（必须在 app.js 之前） -->
+  <script src="js/db.js?v=3.0"></script>
   <script src="js/api.js?v=2.1"></script>
   <script src="js/parser.js?v=2.1"></script>
   <script src="js/embeddings.js?v=2.1"></script>
-  <script src="js/app.js?v=2.1"></script>
+  <script src="js/app.js?v=3.0"></script>
 </body>
 </html>

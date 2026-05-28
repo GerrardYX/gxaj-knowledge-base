@@ -4,13 +4,17 @@
 
 // ============ 状态管理 ============
 const state = {
-  currentUser: null,  // 保留兼容性（暂时设置为null）
-  documents: [],  // {id, name, content, chunks, size, uploadedAt, chunkCount}
-  messages: [],    // {role, content, time}
+  currentUser: null,
+  documents: [],
+  messages: [],
   isTyping: false,
-  currentConversationId: null,  // 当前对话ID
-  isEmbeddingModelReady: false,  // 本地 embedding 模型是否就绪
-  modelReadyNotified: false  // 模型就绪 toast 是否已弹出过
+  currentConversationId: null,
+  isEmbeddingModelReady: false,
+  modelReadyNotified: false,
+  lastUserQuery: '',        // 最后一次用户提问（用于重新生成）
+  perfModeLow: false,       // 低性能模式开关
+  lastSearchResults: [],     // 最后一次搜索结果（用于来源标签）
+  lastMatchedDocs: [],      // 最后一次匹配的文档名（用于来源标签）
 };
 
 // ============ DOM 元素 ============
@@ -19,66 +23,100 @@ let elements = {};
 // ============ 对话历史管理 ============
 
 /**
- * 获取所有对话历史
+ * 获取所有对话历史（优先 IndexedDB）
+ * @returns {Promise<Array>}
  */
-function getConversations() {
+async function getConversations() {
+  if (window.DB) {
+    try {
+      const convs = await DB.ConversationsDB.loadAll();
+      return convs;
+    } catch (e) {
+      console.warn('[App] IndexedDB 对话读取失败，降级到 localStorage:', e);
+      const data = localStorage.getItem('gxaj_conversations');
+      return data ? JSON.parse(data) : [];
+    }
+  }
   const data = localStorage.getItem('gxaj_conversations');
   return data ? JSON.parse(data) : [];
 }
 
 /**
- * 保存对话历史
- * @param {string} id - 对话ID
- * @param {Array} messages - 消息数组
+ * 保存对话历史（优先 IndexedDB，异步）
  */
-function saveConversation(id, messages) {
-  const conversations = getConversations();
+async function saveConversation(id, messages) {
+  const conversations = await getConversations();
   const existing = conversations.find(c => c.id === id);
-  
-  // 性能优化：只保留最近40条消息，防止 localStorage 写入卡顿（赛扬+4GB）
+
+  // 只保留最近40条消息
   const trimmed = messages.length > 50 ? messages.slice(-40) : messages;
-  
+
   const conversation = {
     id: id,
     title: trimmed.length > 0 ? trimmed[0].content.substring(0, 30) + (trimmed[0].content.length > 30 ? '...' : '') : '新对话',
     messages: trimmed,
     updatedAt: new Date().toISOString()
   };
-  
+
   if (existing) {
     Object.assign(existing, conversation);
   } else {
     conversations.unshift(conversation);
   }
-  
+
   // 最多保存50条对话
   if (conversations.length > 50) {
     conversations.pop();
   }
-  
+
+  // 优先写入 IndexedDB
+  if (window.DB) {
+    try {
+      for (const conv of conversations) {
+        await DB.ConversationsDB.save(conv);
+      }
+      return;
+    } catch (e) {
+      console.warn('[App] IndexedDB 写入失败，降级到 localStorage:', e);
+    }
+  }
+
   localStorage.setItem('gxaj_conversations', JSON.stringify(conversations));
 }
 
 /**
  * 删除对话历史
- * @param {string} id - 对话ID
  */
-function deleteConversation(id) {
-  const conversations = getConversations().filter(c => c.id !== id);
+async function deleteConversation(id) {
+  if (window.DB) {
+    try {
+      await DB.ConversationsDB.remove(id);
+      return;
+    } catch (e) {
+      console.warn('[App] IndexedDB 删除失败，降级到 localStorage:', e);
+    }
+  }
+  const conversations = (await getConversations()).filter(c => c.id !== id);
   localStorage.setItem('gxaj_conversations', JSON.stringify(conversations));
 }
 
 /**
  * 重命名对话
  */
-function renameConversation(id) {
-  const conversations = getConversations();
+async function renameConversation(id) {
+  const conversations = await getConversations();
   const conv = conversations.find(c => c.id === id);
   if (!conv) return;
   const newTitle = prompt('重命名对话：', conv.title);
   if (newTitle && newTitle.trim()) {
     conv.title = newTitle.trim();
-    localStorage.setItem('gxaj_conversations', JSON.stringify(conversations));
+    if (window.DB) {
+      try { await DB.ConversationsDB.save(conv); } catch (e) {
+        localStorage.setItem('gxaj_conversations', JSON.stringify(conversations));
+      }
+    } else {
+      localStorage.setItem('gxaj_conversations', JSON.stringify(conversations));
+    }
     loadConversationHistory();
     showToast('已重命名', 'success');
   }
@@ -87,22 +125,23 @@ function renameConversation(id) {
 /**
  * 删除对话（包装函数，供侧边栏调用）
  */
-function removeConversation(id) {
-  deleteConversation(id);
+async function removeConversation(id) {
+  if (!confirm('确定要删除这条对话记录吗？')) return;
+  await deleteConversation(id);
   loadConversationHistory();
   if (state.currentConversationId === id) {
     state.currentConversationId = 'conv_' + Date.now();
     state.messages = [];
     renderMessages();
   }
-  showToast('对话已删除', 'info');
+  showToast('对话已删除', 'success');
 }
 
 /**
  * 加载对话历史列表到侧边栏
  */
-function loadConversationHistory() {
-  const conversations = getConversations();
+async function loadConversationHistory() {
+  const conversations = await getConversations();
   const historyContainer = document.getElementById('conversationHistory');
   
   if (!historyContainer) return;
@@ -156,8 +195,8 @@ function formatConversationTime(isoString) {
  * 加载指定对话
  * @param {string} id - 对话ID
  */
-function loadConversation(id) {
-  const conversations = getConversations();
+async function loadConversation(id) {
+  const conversations = await getConversations();
   const conversation = conversations.find(c => c.id === id);
   
   if (conversation) {
@@ -172,16 +211,14 @@ function loadConversation(id) {
 /**
  * 删除对话（对外暴露）
  */
-window.removeConversation = function(id) {
-  if (confirm('确定要删除这条对话记录吗？')) {
-    deleteConversation(id);
-    // 如果删除的是当前对话，重置
-    if (state.currentConversationId === id) {
-      handleNewChat();
-    }
-    loadConversationHistory();
-    showToast('对话已删除', 'success');
+window.removeConversation = async function(id) {
+  await deleteConversation(id);
+  // 如果删除的是当前对话，重置
+  if (state.currentConversationId === id) {
+    handleNewChat();
   }
+  loadConversationHistory();
+  showToast('对话已删除', 'success');
 };
 
 // ============ 初始化 ============
@@ -204,35 +241,54 @@ function initElements() {
     // 主应用
     appContainer: document.getElementById('appContainer'),
     sidebar: document.getElementById('sidebar'),
-    
+
     // 聊天区域
     chatArea: document.getElementById('chatArea'),
     messageList: document.getElementById('messageList'),
     welcomeArea: document.getElementById('welcomeArea'),
     chatHeader: document.getElementById('chatHeader'),
-    
+
     // 输入区域
     inputArea: document.getElementById('inputArea'),
     messageInput: document.getElementById('messageInput'),
     sendBtn: document.getElementById('sendBtn'),
-    
+
     // 知识库面板
     knowledgePanel: document.getElementById('knowledgePanel'),
     uploadZone: document.getElementById('uploadZone'),
     fileInput: document.getElementById('fileInput'),
     fileList: document.getElementById('fileList'),
     uploadProgress: document.getElementById('uploadProgress'),
-    
+
     // 对话历史
     conversationHistory: document.getElementById('conversationHistory'),
-    
+
     // 其他
     newChatBtn: document.getElementById('newChatBtn'),
     knowledgeBtn: document.getElementById('knowledgeBtn'),
     clearKnowledgeBtn: document.getElementById('clearKnowledgeBtn'),
     loadingOverlay: document.getElementById('loadingOverlay'),
     loadingText: document.getElementById('loadingText'),
-    toastContainer: document.getElementById('toastContainer')
+    toastContainer: document.getElementById('toastContainer'),
+
+    // 新增：检索状态气泡
+    searchStatusBubble: document.getElementById('searchStatusBubble'),
+    searchStatusText: document.getElementById('searchStatusText'),
+    searchStatusDetail: document.getElementById('searchStatusDetail'),
+
+    // 新增：低性能模式按钮
+    perfModeToggle: document.getElementById('perfModeToggle'),
+
+    // 新增：文档预览区
+    docPreviewArea: document.getElementById('docPreviewArea'),
+    docPreviewTitle: document.getElementById('docPreviewTitle'),
+    docPreviewContent: document.getElementById('docPreviewContent'),
+
+    // 新增：来源引用弹窗
+    sourceRefModal: document.getElementById('sourceRefModal'),
+    sourceRefTitle: document.getElementById('sourceRefTitle'),
+    sourceRefBody: document.getElementById('sourceRefBody'),
+    sourceRefMeta: document.getElementById('sourceRefMeta')
   };
 }
 
@@ -273,18 +329,23 @@ function initEventListeners() {
   elements.knowledgePanel.addEventListener('click', (e) => {
     if (e.target === elements.knowledgePanel) closeKnowledgePanel();
   });
+
+  // 低性能模式切换
+  if (elements.perfModeToggle) {
+    elements.perfModeToggle.addEventListener('click', togglePerfMode);
+  }
 }
 
 // ============ 应用初始化 ============
 function initApp() {
   // 初始化当前对话ID
   state.currentConversationId = 'conv_' + Date.now();
-  
+
   // 渲染消息和对话历史
   renderMessages();
   loadConversationHistory();
 
-  // 加载知识库文档
+  // 加载知识库文档（优先 IndexedDB，自动迁移 localStorage）
   loadDocuments();
 
   // 启动定时连接检查
@@ -295,10 +356,13 @@ function initApp() {
 
   console.log('[App] 应用已初始化，无需登录');
 
+  // 恢复低性能模式设置
+  restorePerfModeSetting();
+
   // 首次使用提示
   if (!localStorage.getItem('gxaj_first_visit')) {
     setTimeout(() => {
-      showToast('👋 欢迎！点击左侧「知识库管理」上传文档开始使用', 'info');
+      showToast('👋 欢迎！点击右侧「知识库」图标上传文档开始使用', 'info');
       localStorage.setItem('gxaj_first_visit', '1');
     }, 1000);
   }
@@ -395,8 +459,13 @@ function renderMessages() {
 }
 
 function formatMessageContent(content) {
-  // 简单格式化：处理换行
-  return content.split('\n').map(line => `<p>${escapeHtml(line)}</p>`).join('');
+  // 处理换行，同时保留已有的 source-tag 标签（来自 formatContentWithSourceTags）
+  return content.split('\n').map(line => {
+    if (line.includes('class="source-tag"')) {
+      return line; // 已是 HTML 标签，原样保留
+    }
+    return `<p>${escapeHtml(line)}</p>`;
+  }).join('');
 }
 
 function escapeHtml(text) {
@@ -444,6 +513,9 @@ async function sendToAI(userMessage) {
   elements.sendBtn.disabled = true;
   showTypingIndicator();
 
+  // 记录当前用户问题（用于重新生成功能）
+  state.lastUserQuery = userMessage;
+
   // 先追加一条空的 AI 消息 DOM（typing indicator 已包含头像，这里只创建消息结构）
   appendAssistantMessage('', true);
 
@@ -458,44 +530,41 @@ async function sendToAI(userMessage) {
         chunkToDocMap.push(doc.name);
       });
     });
-    
+
     console.log('[Search] 文档总数:', state.documents.length);
     console.log('[Search] Chunk 总数:', allChunks.length);
-    if (allChunks.length > 0) {
-      console.log('[Search] 第一个 chunk 内容:', allChunks[0].text.substring(0, 100));
-    }
 
-    // 更新状态指示器
-    updateEmbeddingStatus('正在检索相关文档...');
+    // ===== 显示检索状态气泡 =====
+    showSearchStatus('正在扫描知识库文档...', `${state.documents.length} 个文档 · ${allChunks.length} 个段落`);
 
     if (allChunks.length === 0) {
-      const msg = '📂 知识库暂无文档，请先让管理员上传相关文档。';
+      hideSearchStatus();
+      const msg = '📂 知识库暂无文档，请先上传相关文档。';
       updateLastAssistantMessage('', msg);
       const lastMsg = state.messages[state.messages.length - 1];
       if (lastMsg && lastMsg.role === 'assistant') {
         lastMsg.content = msg;
       }
       removeTypingIndicator();
-      saveConversation(state.currentConversationId, state.messages);
+      await saveConversation(state.currentConversationId, state.messages);
       loadConversationHistory();
       state.isTyping = false;
       elements.sendBtn.disabled = false;
       return;
     }
 
-    // 提取对话历史（最近4条，用于上下文增强）
+    // 提取对话历史（最近6条，用于上下文增强）
     const recentHistory = state.messages
       .filter(m => m.role !== 'system')
       .slice(-6);
 
     // 搜索相关 chunks
     let results = [];
-    let embStatus = '模型加载中...';
 
     try {
-      updateEmbeddingStatus(embStatus);
+      showSearchStatus('加载向量模型...', '准备语义检索');
       await Embeddings.loadModel();
-      updateEmbeddingStatus('🔍 正在语义检索...');
+      showSearchStatus('正在进行语义检索...', `在 ${allChunks.length} 个段落中查找相关内容...`);
 
       results = await Embeddings.searchWithHistory(
         userMessage,
@@ -508,45 +577,57 @@ async function sendToAI(userMessage) {
       console.warn('[Embedding] 搜索失败，降级为关键词匹配:', embErr);
     }
 
-    // 修复：如果向量搜索无结果或失败，尝试关键词搜索
+    // 如果向量搜索无结果或失败，尝试关键词搜索
     if (results.length === 0) {
-      console.log('[Search] 向量搜索无结果，尝试关键词搜索');
+      showSearchStatus('关键词匹配中...', '向量检索未命中，切换到文本匹配模式');
       results = fallbackKeywordSearch(userMessage, allChunks);
       console.log('[Search] 关键词搜索结果数:', results.length);
     }
-    
-    // 终极兜底：如果还是无结果，尝试模糊匹配
+
+    // 终极兜底
     if (results.length === 0) {
-      console.log('[Search] 关键词搜索也无结果，尝试模糊匹配');
       results = fuzzySearch(userMessage, allChunks);
       console.log('[Search] 模糊匹配结果数:', results.length);
     }
 
+    // 存储搜索结果（用于来源标签和重新生成）
+    state.lastSearchResults = results;
+    state.lastMatchedDocs = results.map(r => chunkToDocMap[r.index] || '未知文档');
+
+    // 显示检索到的内容摘要
+    const foundDocs = [...new Set(state.lastMatchedDocs)];
+    showSearchStatus(`找到 ${results.length} 条相关段落`, `来源: ${foundDocs.join(', ')}`);
+
     // 生成回答
-    updateEmbeddingStatus('🧠 AI 正在深度思考...');
-    const matchedDocs = results.map(r => chunkToDocMap[r.index] || '未知文档');
+    showSearchStatus('AI 正在生成回答...', '基于检索到的内容进行推理');
+    const matchedDocs = state.lastMatchedDocs;
     const result = await Embeddings.buildAnswer(results, userMessage, matchedDocs);
 
+    hideSearchStatus();
     removeTypingIndicator();
 
     // 如果有思考过程，先展示思考（带动画）
     if (result.thinking) {
-      updateEmbeddingStatus('💭 思考完成，整理答案...');
       await showThinkingAnimation(result.thinking);
     }
 
-    // 更新消息（显示正式回答）
-    updateLastAssistantMessage('', result.content);
+    // 更新消息（显示正式回答 + 来源标签化）
+    const contentWithTags = formatContentWithSourceTags(result.content, results, chunkToDocMap);
+    updateLastAssistantMessage('', contentWithTags);
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage && lastMessage.role === 'assistant') {
-      lastMessage.content = result.content;
+      lastMessage.content = contentWithTags;
     }
 
-    saveConversation(state.currentConversationId, state.messages);
+    // 显示重新生成按钮
+    showRegenerateButton();
+
+    await saveConversation(state.currentConversationId, state.messages);
     loadConversationHistory();
 
   } catch (error) {
     console.error('Search Error:', error);
+    hideSearchStatus();
     removeTypingIndicator();
     updateLastAssistantMessage('', `❌ 检索过程发生错误: ${error.message}\n\n请刷新页面后重试，或联系管理员检查知识库状态。`);
     const lastMsg = state.messages[state.messages.length - 1];
@@ -558,7 +639,7 @@ async function sendToAI(userMessage) {
 
   state.isTyping = false;
   elements.sendBtn.disabled = false;
-  updateEmbeddingStatus(null); // 清除状态
+  updateEmbeddingStatus(null);
 }
 
 /**
@@ -895,10 +976,10 @@ function autoResizeTextarea() {
   textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 }
 
-function handleNewChat() {
+async function handleNewChat() {
   // 保存当前对话（如果有消息）
   if (state.messages.length > 0 && state.currentConversationId) {
-    saveConversation(state.currentConversationId, state.messages);
+    await saveConversation(state.currentConversationId, state.messages);
   }
   
   // 生成新对话ID
@@ -1229,8 +1310,32 @@ async function loadKnowledgeFilesFromAssets() {
 }
 
 function loadDocuments() {
-  // 策略：优先从 localStorage 恢复（保留用户手动上传的文档）
-  // 仅在 localStorage 为空时才尝试从 assets/ 自动解析
+  // 策略：优先从 IndexedDB 加载（自动从 localStorage 迁移）
+  if (window.DB && DB.DocsDB) {
+    DB.DocsDB.loadAll().then(docs => {
+      if (docs.length > 0) {
+        state.documents = docs;
+        console.log('[Load] 从 IndexedDB 恢复了', docs.length, '个文档');
+        renderFileList();
+        updateKnowledgeStatus();
+        preloadEmbeddingModel();
+      } else {
+        // IndexedDB 也为空，尝试 localStorage 迁移
+        loadFromLocalStorageFallback();
+      }
+    }).catch(err => {
+      console.error('[Load] IndexedDB 读取失败，降级到 localStorage:', err);
+      loadFromLocalStorageFallback();
+    });
+  } else {
+    loadFromLocalStorageFallback();
+  }
+}
+
+/**
+ * 从 localStorage 回退加载（兼容旧数据）
+ */
+function loadFromLocalStorageFallback() {
   const saved = localStorage.getItem('gxaj_documents');
   if (saved) {
     try {
@@ -1243,18 +1348,27 @@ function loadDocuments() {
             embedding: c.embedding ? new Float32Array(c.embedding) : null
           }))
         }));
-        console.log('[Load] 从 localStorage 恢复了', state.documents.length, '个文档');
+        console.log('[Load] 从 localStorage 恢复了', state.documents.length, '个文档（将迁移到 IndexedDB）');
+
+        // 异步迁移到 IndexedDB
+        if (window.DB && DB.DocsDB) {
+          DB.DocsDB.save(state.documents).then(() => {
+            console.log('[Load] 已迁移到 IndexedDB');
+            localStorage.removeItem('gxaj_documents');
+          }).catch(e => console.warn('[Load] 迁移失败:', e));
+        }
+
         renderFileList();
         updateKnowledgeStatus();
         preloadEmbeddingModel();
-        return; // localStorage 有数据，直接返回
+        return;
       }
     } catch (e) {
       console.error('[Load] 解析 localStorage 失败:', e);
     }
   }
 
-  // localStorage 为空 → 尝试从 assets/knowledge_files/ 自动解析（首次启动）
+  // 都为空 → 尝试从 assets/ 自动解析
   if (state.documents.length === 0) {
     loadKnowledgeFilesFromAssets().then(() => {
       renderFileList();
@@ -1273,7 +1387,21 @@ function loadDocuments() {
 }
 
 function saveDocuments() {
-  // Float32Array 无法直接 JSON 序列化，先转成普通数组
+  // 优先写入 IndexedDB
+  if (window.DB && DB.DocsDB) {
+    DB.DocsDB.save(state.documents).catch(e => {
+      console.warn('[Save] IndexedDB 写入失败:', e);
+      saveToLocalStorageFallback();
+    });
+  } else {
+    saveToLocalStorageFallback();
+  }
+}
+
+/**
+ * localStorage 回退保存
+ */
+function saveToLocalStorageFallback() {
   const serializable = state.documents.map(doc => ({
     ...doc,
     chunks: doc.chunks.map(c => ({
@@ -1433,9 +1561,9 @@ function renderFileList() {
     <div class="file-item" data-id="${doc.id}">
       <div class="file-icon">${Parser.getFileIcon(doc.name)}</div>
       <div class="file-info">
-        <div class="file-name">${escapeHtml(doc.name)}</div>
+        <div class="file-name" onclick="previewDocument('${doc.id}')" style="cursor:pointer;color:var(--accent);" title="点击预览文档内容">${escapeHtml(doc.name)}</div>
         <div class="file-meta">
-          ${Parser.formatFileSize(doc.size)} · ${doc.chunkCount} 个段落 · 
+          ${Parser.formatFileSize(doc.size)} · ${doc.chunkCount} 个段落 ·
           ${new Date(doc.uploadedAt).toLocaleDateString('zh-CN')}
         </div>
       </div>
@@ -1444,7 +1572,7 @@ function renderFileList() {
       </div>
     </div>
   `).join('');
-  
+
   elements.fileList.innerHTML = `
     <h4>📚 知识库文档 (${state.documents.length})</h4>
     ${html}
@@ -1749,4 +1877,250 @@ window.App = {
   state,
   elements,
   showToast
+};
+
+// ============ 新增：检索状态气泡 ============
+
+/**
+ * 显示检索状态气泡（可视化检索过程）
+ */
+function showSearchStatus(text, detail) {
+  const bubble = elements.searchStatusBubble;
+  const textEl = elements.searchStatusText;
+  const detailEl = elements.searchStatusDetail;
+  if (!bubble) return;
+
+  if (textEl) textEl.textContent = text;
+  if (detailEl) {
+    detailEl.textContent = detail || '';
+    detailEl.style.display = detail ? 'block' : 'none';
+  }
+  bubble.classList.remove('hidden');
+}
+
+function hideSearchStatus() {
+  const bubble = elements.searchStatusBubble;
+  if (bubble) bubble.classList.add('hidden');
+}
+
+// ============ 新增：低性能模式 ============
+
+/**
+ * 切换低性能模式
+ * 关闭动画、模糊滤镜、阴影等，适合老旧 CPU / 低内存机器
+ */
+function togglePerfMode() {
+  state.perfModeLow = !state.perfModeLow;
+  const container = elements.appContainer;
+
+  if (state.perfModeLow) {
+    container.classList.add('perf-mode-low');
+    showToast('⚡ 已开启低性能模式（关闭动画/模糊/阴影）', 'info');
+    // 持久化设置
+    if (window.DB && DB.SettingsDB) {
+      DB.SettingsDB.set('perfModeLow', true).catch(() => {});
+    }
+    localStorage.setItem('gxaj_perf_low', '1');
+  } else {
+    container.classList.remove('perf-mode-low');
+    showToast('✨ 已恢复正常渲染模式', 'success');
+    if (window.DB && DB.SettingsDB) {
+      DB.SettingsDB.set('perfModeLow', false).catch(() => {});
+    }
+    localStorage.removeItem('gxaj_perf_low');
+  }
+}
+
+/**
+ * 启动时恢复低性能模式设置
+ */
+async function restorePerfModeSetting() {
+  let isLow = localStorage.getItem('gxaj_perf_low') === '1';
+
+  // 也从 SettingsDB 尝试读取
+  if (!isLow && window.DB && DB.SettingsDB) {
+    try {
+      const saved = await DB.SettingsDB.get('perfModeLow');
+      if (saved === true) isLow = true;
+    } catch (e) { /* ignore */ }
+  }
+
+  if (isLow) {
+    state.perfModeLow = true;
+    elements.appContainer?.classList.add('perf-mode-low');
+  }
+}
+
+// ============ 新增：重新生成回答 ============
+
+/**
+ * 重新生成 AI 回答（使用上一次的查询和搜索结果）
+ */
+window.regenerateResponse = async function(btn) {
+  if (state.isTyping || !state.lastUserQuery) return;
+
+  // 找到当前消息列表中最后一条 AI 消息并移除
+  const messages = elements.messageList.querySelectorAll('.message.assistant');
+  const lastAIMsg = messages[messages.length - 1];
+  if (lastAIMsg) lastAIMsg.remove();
+
+  // 从状态数组中也移除最后一条 AI 消息
+  if (state.messages.length > 0 && state.messages[state.messages.length - 1].role === 'assistant') {
+    state.messages.pop();
+  }
+
+  // 重新发送请求
+  await sendToAI(state.lastUserQuery);
+};
+
+/**
+ * 显示重新生成按钮（在最新 AI 回复的消息操作栏中）
+ */
+function showRegenerateButton() {
+  const messages = elements.messageList.querySelectorAll('.message.assistant');
+  const lastMsg = messages[messages.length - 1];
+  if (!lastMsg) return;
+
+  const regenBtn = lastMsg.querySelector('.regenerate-btn');
+  if (regenBtn) regenBtn.style.display = '';
+}
+
+// ============ 新增：来源标签化 ============
+
+/**
+ * 将回答中的纯文本来源引用转换为可点击的标签
+ * @param {string} content - 原始内容（含 "📚 来源引用：[1] 文件名" 格式）
+ * @param {Array} results - 搜索结果 [{text, score, index}]
+ * @param {Array} chunkToDocMap - chunk 索引到文档名的映射
+ * @returns {string} 处理后的 HTML 内容
+ */
+function formatContentWithSourceTags(content, results, chunkToDocMap) {
+  if (!content) return '';
+
+  // 匹配 "来源引用：[1] 文件名 [2] 文件名2" 格式
+  const sourceRefRegex = /---\n?📚\s*来源引用[：:]([\s\S]*?)(?:\n|$)/;
+
+  // 提取来源信息用于构建标签
+  let sourceInfo = '';
+  const match = content.match(sourceRefRegex);
+  if (match) {
+    sourceInfo = match[1].trim();
+  }
+
+  // 构建可点击的来源标签 HTML
+  let tagsHtml = '';
+  if (results && results.length > 0) {
+    const uniqueSources = [];
+    const seenDocs = new Set();
+
+    results.forEach((r, i) => {
+      const docName = chunkToDocMap[r.index] || '未知文档';
+      if (!seenDocs.has(docName)) {
+        seenDocs.add(docName);
+        uniqueSources.push({ docName, index: r.index, text: r.text, score: r.score });
+      }
+    });
+
+    tagsHtml = '<div class="source-tags-row">';
+    uniqueSources.forEach(s => {
+      tagsHtml += `<span class="source-tag" onclick="showSourceRef('${escapeAttr(s.docName)}', ${s.index})">
+        <span class="tag-dot"></span>${escapeHtml(s.docName)}
+      </span>`;
+    });
+    tagsHtml += '</div>';
+  }
+
+  // 移除原始的来源引用文本块
+  let cleanedContent = content.replace(sourceRefRegex, '').replace(/💡.*?如有疑问请查阅原始文档。/g, '').trim();
+
+  // 如果有标签，追加在末尾
+  if (tagsHtml) {
+    cleanedContent += '\n\n' + tagsHtml;
+  }
+
+  return cleanedContent;
+}
+
+function escapeAttr(str) {
+  return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+// ============ 新增：文档预览（侧边栏内）==========
+
+/**
+ * 预览指定文档的纯文本内容
+ */
+window.previewDocument = function(docId) {
+  const doc = state.documents.find(d => d.id == docId);
+  if (!doc) return;
+
+  const previewArea = elements.docPreviewArea;
+  const previewTitle = elements.docPreviewTitle;
+  const previewContent = elements.docPreviewContent;
+
+  if (previewTitle) previewTitle.textContent = doc.name;
+  if (previewContent) {
+    // 截取前3000字预览
+    const preview = doc.content.length > 3000 ? doc.content.substring(0, 3000) + '\n\n...（内容过长，已截断）' : doc.content;
+    previewContent.textContent = preview;
+  }
+  if (previewArea) previewArea.classList.remove('hidden');
+
+  // 同时打开知识库面板（如果未打开）
+  if (elements.knowledgePanel && !elements.knowledgePanel.classList.contains('active')) {
+    openKnowledgePanel();
+  }
+};
+
+window.closeDocPreview = function() {
+  const area = elements.docPreviewArea;
+  if (area) area.classList.add('hidden');
+};
+
+// ============ 新增：来源引用弹窗 ==========
+
+/**
+ * 显示来源原文弹窗
+ * @param {string} docName - 来源文档名
+ * @param {number} chunkIndex - 在搜索结果中的索引
+ */
+window.showSourceRefModal = function(docName, chunkIndex) {
+  const modal = elements.sourceRefModal;
+  const titleEl = elements.sourceRefTitle;
+  const bodyEl = elements.sourceRefBody;
+  const metaEl = elements.sourceRefMeta;
+
+  if (!modal) return;
+
+  // 从 lastSearchResults 中查找对应的文本
+  let text = '';
+  let actualDocName = docName;
+  let similarity = 0;
+
+  if (state.lastSearchResults && state.lastSearchResults.length > 0) {
+    const result = state.lastSearchResults[chunkIndex];
+    if (result) {
+      text = result.text;
+      similarity = result.score || 0;
+    }
+  }
+
+  // 如果没找到，尝试按文档名直接查
+  if (!text) {
+    const doc = state.documents.find(d => d.name === docName);
+    if (doc && doc.content) {
+      text = doc.content.substring(0, 2000) + (doc.content.length > 2000 ? '\n\n...' : '');
+    }
+  }
+
+  if (titleEl) titleEl.textContent = `来源原文 · ${actualDocName}`;
+  if (bodyEl) bodyEl.textContent = text || '无法加载原文内容';
+  if (metaEl) metaEl.textContent = `相似度: ${(similarity * 100).toFixed(0)}% · 文档: ${actualDocName}`;
+
+  modal.classList.remove('hidden');
+};
+
+window.closeSourceRefModal = function() {
+  const modal = elements.sourceRefModal;
+  if (modal) modal.classList.add('hidden');
 };
