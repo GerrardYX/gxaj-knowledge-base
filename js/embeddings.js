@@ -33,15 +33,19 @@ function initWorker() {
     switch (type) {
       case 'ready':
         console.log('[Embedding] Worker 已启动:', data?.message);
+        // 可在此处触发 UI 更新
         break;
 
       case 'progress':
-        // 转发进度事件
-        if (data?.status === 'progress') {
+        // 转发进度事件，方便 UI 展示
+        if (data?.status === 'loading') {
+          console.log(`[Embedding] 模型加载中: ${data.message || ''}`);
+        } else if (data?.status === 'progress') {
           console.log(`[Embedding] 模型加载: ${data.progress}%`);
         } else if (data?.status === 'embedding') {
           console.log(`[Embedding] 向量计算: ${data.done}/${data.total}`);
         }
+        // 可在此处触发 UI 进度更新
         break;
 
       case 'result':

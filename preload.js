@@ -22,5 +22,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('model-status', handler);
     // 返回清理函数
     return () => ipcRenderer.removeListener('model-status', handler);
+  },
+  // 新增：监听模型加载进度（用于 UI 展示）
+  onModelProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    ipcRenderer.on('model-progress', handler);
+    return () => ipcRenderer.removeListener('model-progress', handler);
+  },
+  // 新增：获取代理服务状态（调用 api.js 中的检查）
+  getProxyStatus: async () => {
+    // 通过渲染进程调用 API 模块的检查函数
+    if (window.API && window.API.getProxyStatus) {
+      return await window.API.getProxyStatus();
+    }
+    return { available: false, message: 'API 模块未加载' };
   }
 });
