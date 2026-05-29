@@ -163,6 +163,7 @@ function createWindow() {
     // 性能优化参数
     backgroundColor: '#0f0f1a',
     show: false,
+    icon: path.join(__dirname, 'build/logo_gxaj.jpg'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

@@ -410,7 +410,7 @@ function addMessage(role, content) {
   div.className = `message ${role}`;
   div.innerHTML = `
     <div class="message-avatar">
-      ${role === 'assistant' ? '🐼' : (state.currentUser?.displayName?.charAt(0) || 'U')}
+      ${role === 'assistant' ? '<img src="build/logo_gxaj.jpg" alt="AI" style="width:100%;height:100%;object-fit:contain;border-radius:var(--radius);">' : (state.currentUser?.displayName?.charAt(0) || 'U')}
     </div>
     <div class="message-content">
       <div class="message-bubble">
@@ -450,7 +450,7 @@ function renderMessages() {
     div.className = `message ${msg.role}`;
     div.innerHTML = `
       <div class="message-avatar">
-        ${msg.role === 'assistant' ? '🐼' : (state.currentUser?.displayName?.charAt(0) || 'U')}
+        ${msg.role === 'assistant' ? '<img src="build/logo_gxaj.jpg" alt="AI" style="width:100%;height:100%;object-fit:contain;border-radius:var(--radius);">' : (state.currentUser?.displayName?.charAt(0) || 'U')}
       </div>
       <div class="message-content">
         <div class="message-bubble">
@@ -640,7 +640,7 @@ function showTypingIndicator() {
   div.className = 'message assistant';
   div.id = 'typingMessage';
   div.innerHTML = `
-    <div class="message-avatar">🐼</div>
+    <div class="message-avatar"><img src="build/logo_gxaj.jpg" alt="AI" style="width:100%;height:100%;object-fit:contain;border-radius:var(--radius);"></div>
     <div class="message-content">
       <div class="message-bubble">
         <div class="typing-indicator">
@@ -967,7 +967,7 @@ function appendAssistantMessage(content, noAvatar = false) {
   const div = document.createElement('div');
   div.className = 'message assistant';
   div.innerHTML = `
-    ${noAvatar ? '' : '<div class="message-avatar">🐼</div>'}
+    ${noAvatar ? '' : '<div class="message-avatar"><img src="build/logo_gxaj.jpg" alt="AI" style="width:100%;height:100%;object-fit:contain;border-radius:var(--radius);"></div>'}
     <div class="message-content">
       <div class="message-bubble">
         ${formatMessageContent(content)}
