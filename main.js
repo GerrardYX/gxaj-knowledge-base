@@ -36,7 +36,7 @@ function startProxyServer() {
   proxyProcess = spawn(nodeExe, [proxyPath], {
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
-    env: { ...process.env, PORT: String(PROXY_PORT) }
+    env: { ...process.env, PORT: String(PROXY_PORT), RESOURCES_PATH: process.resourcesPath || '' }
   });
 
   proxyProcess.stdout.on('data', (data) => {

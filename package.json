@@ -31,22 +31,24 @@
       "assets/**/*",
       "js/**/*",
       "css/**/*",
+      "build/**/*",
       "vendor/**/*",
+      "!vendor/models/**",
       "node_modules/**/*",
       "package.json"
     ],
     "extraResources": [
-      "assets"
+      "assets",
+      {
+        "from": "vendor/models",
+        "to": "vendor/models"
+      }
     ],
     "asar": true,
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
+        "nsis",
+        "portable"
       ],
       "icon": "build/icon.ico",
       "requestedExecutionLevel": "asInvoker"

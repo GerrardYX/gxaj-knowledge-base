@@ -34,7 +34,10 @@ function findAvailablePort(basePort) {
 
 // ─── 模型配置 ───────────────────────────────────────────────────────────────
 const MODEL_NAME = 'Qwen3-0.6B-Q4_K_M.gguf';
-const MODEL_PATH = path.join(__dirname, 'vendor', 'models', MODEL_NAME);
+// 生产环境（打包后）：模型在 extraResources 中，主进程通过 RESOURCES_PATH 环境变量传递位置
+// 开发环境：模型与 proxy.js 同级目录 vendor/models/
+const BASE_DIR = process.env.RESOURCES_PATH || __dirname;
+const MODEL_PATH = path.join(BASE_DIR, 'vendor', 'models', MODEL_NAME);
 
 // ─── 全局变量 ────────────────────────────────────────────────────────────────
 let llama = null;

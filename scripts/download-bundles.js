@@ -42,9 +42,9 @@ if (!platform || !arch) {
 
 // ─── 常量 ─────────────────────────────────────────────────────────────────
 const MODEL_CONFIG = {
-  repo: 'Qwen/Qwen2.5-0.5B-Instruct-GGUF',
-  file: 'qwen2.5-0.5b-instruct-q4_0.gguf',
-  size: 409, // MB
+  repo: 'Qwen/Qwen3-0.6B-GGUF',
+  file: 'qwen3-0.6b-q4_k_m.gguf',
+  size: 500, // MB
 };
 
 // 国内镜像源（速度更快）
