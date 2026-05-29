@@ -30,7 +30,9 @@ jobs:
             model-
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
+        env:
+          NODE_LLAMA_CPP_SKIP_DOWNLOAD: "true"
 
       - name: Download GGUF model (if not cached)
         if: steps.cache-model.outputs.cache-hit != 'true'
