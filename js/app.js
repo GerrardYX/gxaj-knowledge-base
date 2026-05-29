@@ -472,6 +472,11 @@ function renderMessages() {
 function formatMessageContent(content) {
   if (!content) return '';
 
+  // 预处理：为行内的小标题标签自动换行
+  const headerLabels = ['适用场景', '注意事项', '操作步骤', '操作路径', '关键术语', '步骤', '前提条件', '常见问题'];
+  const headerRegex = new RegExp(`([^\\n])(${headerLabels.join('|')})：`, 'g');
+  content = content.replace(headerRegex, '$1\n$2：');
+
   const lines = content.split('\n');
   const result = [];
   let inCodeBlock = false;
