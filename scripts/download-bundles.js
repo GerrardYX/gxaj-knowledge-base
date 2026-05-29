@@ -19,7 +19,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
+const https = require('https');
+const http = require('http');
 const os = require('os');
 
 // ─── 参数解析 ──────────────────────────────────────────────────────────────
@@ -67,28 +68,52 @@ const VENDOR_BASE = path.join(__dirname, '..', 'vendor', 'models');
 // ─── 工具函数 ──────────────────────────────────────────────────────────────
 
 /**
- * 流式下载文件（带进度和重试，axios 自动处理重定向）
+ * 带重定向追踪的流式下载
  */
-async function downloadFile(url, destPath, label = '', maxRetries = 3) {
-  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+function downloadWithRedirects(url, destPath, label, redirectCount = 0) {
+  return new Promise((resolve, reject) => {
+    if (redirectCount > 10) {
+      reject(new Error('重定向次数过多'));
+      return;
+    }
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await axios({
-        method: 'get',
-        url: url,
-        responseType: 'stream',
-        headers: { 'User-Agent': 'Node.js' },
-        timeout: 300000,
-        maxRedirects: 10,
-      });
+    const client = url.startsWith('https') ? https : http;
+    const req = client.get(url, {
+      headers: { 'User-Agent': 'Node.js' },
+      timeout: 300000,
+    }, (res) => {
+      // 处理重定向
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        let redirectUrl = res.headers.location;
+        // 补全相对路径
+        if (redirectUrl.startsWith('/')) {
+          const u = new URL(url);
+          redirectUrl = `${u.protocol}//${u.host}${redirectUrl}`;
+        }
+        req.destroy();
+        downloadWithRedirects(redirectUrl, destPath, label, redirectCount + 1)
+          .then(resolve)
+          .catch(reject);
+        return;
+      }
 
-      const writer = fs.createWriteStream(destPath);
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+
+      const totalSize = parseInt(res.headers['content-length'] || '0', 10);
       let downloaded = 0;
-      const totalSize = parseInt(response.headers['content-length'] || '0', 10);
       let lastPct = 0;
 
-      response.data.on('data', chunk => {
+      const writeStream = fs.createWriteStream(destPath);
+      writeStream.on('finish', () => {
+        process.stdout.write('\n');
+        resolve();
+      });
+      writeStream.on('error', reject);
+
+      res.on('data', chunk => {
         downloaded += chunk.length;
         if (totalSize > 0) {
           const pct = Math.floor((downloaded / totalSize) * 100);
@@ -103,15 +128,27 @@ async function downloadFile(url, destPath, label = '', maxRetries = 3) {
         }
       });
 
-      await new Promise((resolve, reject) => {
-        response.data.pipe(writer);
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-      });
+      res.pipe(writeStream);
+    });
 
-      process.stdout.write('\n');
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('下载超时 (5分钟)'));
+    });
+  });
+}
+
+/**
+ * 流式下载文件（带进度和重试）
+ */
+async function downloadFile(url, destPath, label = '', maxRetries = 3) {
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await downloadWithRedirects(url, destPath, label);
       return;
-
     } catch (err) {
       if (attempt < maxRetries - 1) {
         const wait = (attempt + 1) * 5000;
