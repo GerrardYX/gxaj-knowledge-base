@@ -19,8 +19,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
-const http = require('http');
+const axios = require('axios');
 const os = require('os');
 
 // ─── 参数解析 ──────────────────────────────────────────────────────────────
@@ -68,64 +67,48 @@ const VENDOR_BASE = path.join(__dirname, '..', 'vendor', 'models');
 // ─── 工具函数 ──────────────────────────────────────────────────────────────
 
 /**
- * 流式下载文件（带进度和重试）
+ * 流式下载文件（带进度和重试，axios 自动处理重定向）
  */
 async function downloadFile(url, destPath, label = '', maxRetries = 3) {
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      let totalSize = 0;
-      let downloaded = 0;
-      let lastPct = 0;
-
-      await new Promise((resolve, reject) => {
-        const req = (url.startsWith('https') ? https : http).get(url, {
-          headers: { 'User-Agent': 'Node.js' }
-        }, (res) => {
-          // 处理重定向
-          if (res.statusCode === 302 || res.statusCode === 301) {
-            const redirectUrl = res.headers.location;
-            req.destroy();
-            resolve({ type: 'redirect', url: redirectUrl });
-            return;
-          }
-          if (res.statusCode !== 200) {
-            reject(new Error(`HTTP ${res.statusCode}`));
-            return;
-          }
-
-          totalSize = parseInt(res.headers['content-length'] || '0', 10);
-          downloaded = 0;
-          lastPct = 0;
-
-          const writeStream = fs.createWriteStream(destPath);
-          writeStream.on('finish', () => resolve({ type: 'done' }));
-          writeStream.on('error', reject);
-
-          res.on('data', chunk => {
-            downloaded += chunk.length;
-            if (totalSize > 0) {
-              const pct = Math.floor((downloaded / totalSize) * 100);
-              if (pct !== lastPct) {
-                lastPct = pct;
-                const mb = (downloaded / 1024 / 1024).toFixed(1);
-                const totalMb = (totalSize / 1024 / 1024).toFixed(1);
-                if (pct % 5 === 0 || pct === 100) {
-                  process.stdout.write(`\r  ${label} ${pct}% (${mb}/${totalMb}MB)`);
-                }
-              }
-            }
-          });
-
-          res.pipe(writeStream);
-        });
-
-        req.on('error', reject);
-        req.setTimeout(300000, () => { req.destroy(); reject(new Error('下载超时 (5分钟)')) });
+      const response = await axios({
+        method: 'get',
+        url: url,
+        responseType: 'stream',
+        headers: { 'User-Agent': 'Node.js' },
+        timeout: 300000,
+        maxRedirects: 10,
       });
 
-      // 如果是重定向，用新 URL 重试
+      const writer = fs.createWriteStream(destPath);
+      let downloaded = 0;
+      const totalSize = parseInt(response.headers['content-length'] || '0', 10);
+      let lastPct = 0;
+
+      response.data.on('data', chunk => {
+        downloaded += chunk.length;
+        if (totalSize > 0) {
+          const pct = Math.floor((downloaded / totalSize) * 100);
+          if (pct !== lastPct) {
+            lastPct = pct;
+            const mb = (downloaded / 1024 / 1024).toFixed(1);
+            const totalMb = (totalSize / 1024 / 1024).toFixed(1);
+            if (pct % 5 === 0 || pct === 100) {
+              process.stdout.write(`\r  ${label} ${pct}% (${mb}/${totalMb}MB)`);
+            }
+          }
+        }
+      });
+
+      await new Promise((resolve, reject) => {
+        response.data.pipe(writer);
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+
       process.stdout.write('\n');
       return;
 
@@ -148,23 +131,14 @@ async function downloadWithFallback(sources, destPath, label) {
   for (const source of sources) {
     console.log(`\n📡 尝试从 ${source.name} 下载...`);
 
-    let url = source.getUrl(MODEL_CONFIG);
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        console.log(`  URL: ${url}`);
-        await downloadFile(url, destPath, label);
-        console.log(`  ✓ ${source.name} 下载成功`);
-        return true;
-      } catch (err) {
-        console.warn(`  ⚠️  ${source.name} 下载失败: ${err.message}`);
-        // 如果是重定向失败，尝试直接用重定向 URL
-        if (err.message.includes('HTTP') && attempt < 2) {
-          console.log('  → 跟随重定向重试...');
-          continue;
-        }
-        break;
-      }
+    try {
+      const url = source.getUrl(MODEL_CONFIG);
+      console.log(`  URL: ${url}`);
+      await downloadFile(url, destPath, label);
+      console.log(`  ✓ ${source.name} 下载成功`);
+      return true;
+    } catch (err) {
+      console.warn(`  ⚠️  ${source.name} 下载失败: ${err.message}`);
     }
   }
 
