@@ -410,7 +410,7 @@ function addMessage(role, content) {
   div.className = `message ${role}`;
   div.innerHTML = `
     <div class="message-avatar">
-      ${role === 'assistant' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg>' : (state.currentUser?.displayName?.charAt(0) || 'U')}
+      ${role === 'assistant' ? '🐼' : (state.currentUser?.displayName?.charAt(0) || 'U')}
     </div>
     <div class="message-content">
       <div class="message-bubble">
@@ -450,7 +450,7 @@ function renderMessages() {
     div.className = `message ${msg.role}`;
     div.innerHTML = `
       <div class="message-avatar">
-        ${msg.role === 'assistant' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg>' : (state.currentUser?.displayName?.charAt(0) || 'U')}
+        ${msg.role === 'assistant' ? '🐼' : (state.currentUser?.displayName?.charAt(0) || 'U')}
       </div>
       <div class="message-content">
         <div class="message-bubble">
@@ -640,7 +640,7 @@ function showTypingIndicator() {
   div.className = 'message assistant';
   div.id = 'typingMessage';
   div.innerHTML = `
-    <div class="message-avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg></div>
+    <div class="message-avatar">🐼</div>
     <div class="message-content">
       <div class="message-bubble">
         <div class="typing-indicator">
@@ -967,7 +967,7 @@ function appendAssistantMessage(content, noAvatar = false) {
   const div = document.createElement('div');
   div.className = 'message assistant';
   div.innerHTML = `
-    ${noAvatar ? '' : '<div class="message-avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M8 14v-2a4 4 0 0 1 8 0v2"/><circle cx="12" cy="16" r="1"/><path d="M10 19c-.57 1.75-2.45 3-4.67 3C2.95 22 1 20.05 1 17.67c0-2.22 1.25-4.1 3-4.67"/><path d="M14 19c.57 1.75 2.45 3 4.67 3 2.38 0 4.33-1.95 4.33-4.33 0-2.22-1.25-4.1-3-4.67"/></svg></div>'}
+    ${noAvatar ? '' : '<div class="message-avatar">🐼</div>'}
     <div class="message-content">
       <div class="message-bubble">
         ${formatMessageContent(content)}
