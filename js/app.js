@@ -470,21 +470,157 @@ function renderMessages() {
 }
 
 function formatMessageContent(content) {
-  // 处理换行，同时保留已有的 HTML 标签（来自 formatContentWithSourceTags 等）
-  return content.split('\n').map(line => {
-    // 检测是否为 HTML 行：包含 source-tag、source-tags-row、或任何 <tag ...> 结构
+  if (!content) return '';
+
+  const lines = content.split('\n');
+  const result = [];
+  let inCodeBlock = false;
+  let codeBlockLang = '';
+  let codeBlockContent = [];
+  let inList = false;
+  let inOrderedList = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // 检测已格式化的 HTML 行（source tags、thinking blocks 等）
     const isHtmlLine =
       line.includes('class="source-tag"') ||
       line.includes('class="source-tags-row"') ||
       line.includes('class="thinking-block"') ||
-      /^<(\/?)(div|span|p|ul|ol|li|a|br|hr|img|code|pre|blockquote|strong|em|b|i|table|tr|td|th)\b/i.test(line.trim());
+      /^<(\/?)(div|span|p|ul|ol|li|a|br|hr|img|code|pre|blockquote|strong|em|b|i|table|tr|td|th|h[1-6])\b/i.test(line.trim());
+
     if (isHtmlLine) {
-      return line; // 已是 HTML 标签，原样保留
+      if (inList) { result.push('</ul>'); inList = false; }
+      if (inOrderedList) { result.push('</ol>'); inOrderedList = false; }
+      if (inCodeBlock) { result.push(`<pre><code>${escapeHtml(codeBlockContent.join('\n'))}</code></pre>`); codeBlockContent = []; inCodeBlock = false; }
+      result.push(line);
+      continue;
     }
-    // 空行不包裹 <p>
-    if (!line.trim()) return '';
-    return `<p>${escapeHtml(line)}</p>`;
-  }).join('');
+
+    // 代码块
+    const codeBlockMatch = line.trim().match(/^```(\w*)$/);
+    if (codeBlockMatch) {
+      if (inCodeBlock) {
+        result.push(`<pre><code>${escapeHtml(codeBlockContent.join('\n'))}</code></pre>`);
+        codeBlockContent = [];
+        inCodeBlock = false;
+      } else {
+        if (inList) { result.push('</ul>'); inList = false; }
+        if (inOrderedList) { result.push('</ol>'); inOrderedList = false; }
+        inCodeBlock = true;
+        codeBlockLang = codeBlockMatch[1];
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockContent.push(line);
+      continue;
+    }
+
+    // 空行
+    if (!line.trim()) {
+      if (inList) { result.push('</ul>'); inList = false; }
+      if (inOrderedList) { result.push('</ol>'); inOrderedList = false; }
+      continue;
+    }
+
+    // 标题
+    const h1Match = line.match(/^#\s+(.+)$/);
+    const h2Match = line.match(/^##\s+(.+)$/);
+    const h3Match = line.match(/^###\s+(.+)$/);
+    if (h1Match || h2Match || h3Match) {
+      if (inList) { result.push('</ul>'); inList = false; }
+      if (inOrderedList) { result.push('</ol>'); inOrderedList = false; }
+      const text = (h1Match || h2Match || h3Match)[1];
+      const tag = h1Match ? 'h1' : h2Match ? 'h2' : 'h3';
+      result.push(`<${tag}>${parseInlineMarkdown(text)}</${tag}>`);
+      continue;
+    }
+
+    // 无序列表
+    const ulMatch = line.match(/^(\s*)[-*]\s+(.+)$/);
+    if (ulMatch) {
+      if (!inList) {
+        if (inOrderedList) { result.push('</ol>'); inOrderedList = false; }
+        result.push('<ul>');
+        inList = true;
+      }
+      result.push(`<li>${parseInlineMarkdown(ulMatch[2])}</li>`);
+      continue;
+    }
+
+    // 有序列表
+    const olMatch = line.match(/^(\s*)\d+\.\s+(.+)$/);
+    if (olMatch) {
+      if (!inOrderedList) {
+        if (inList) { result.push('</ul>'); inList = false; }
+        result.push('<ol>');
+        inOrderedList = true;
+      }
+      result.push(`<li>${parseInlineMarkdown(olMatch[2])}</li>`);
+      continue;
+    }
+
+    // 普通段落
+    if (inList) { result.push('</ul>'); inList = false; }
+    if (inOrderedList) { result.push('</ol>'); inOrderedList = false; }
+    result.push(`<p>${parseInlineMarkdown(line)}</p>`);
+  }
+
+  if (inList) result.push('</ul>');
+  if (inOrderedList) result.push('</ol>');
+  if (inCodeBlock) {
+    result.push(`<pre><code>${escapeHtml(codeBlockContent.join('\n'))}</code></pre>`);
+  }
+
+  return result.join('');
+}
+
+/**
+ * 解析行内 Markdown（加粗、斜体、行内代码）
+ * 安全处理：先保护 Markdown 标记，再 escape，最后恢复转换
+ */
+function parseInlineMarkdown(text) {
+  const markers = [];
+  let protectedText = text;
+
+  // 保护行内代码 `code`
+  protectedText = protectedText.replace(/`([^`]+)`/g, (match, code) => {
+    markers.push({ type: 'code', content: code });
+    return `\x00${markers.length - 1}\x00`;
+  });
+
+  // 保护加粗 **text**
+  protectedText = protectedText.replace(/\*\*([^*]+)\*\*/g, (match, content) => {
+    markers.push({ type: 'strong', content });
+    return `\x00${markers.length - 1}\x00`;
+  });
+
+  // 保护斜体 *text*（注意：前面已提取 **，这里只剩单个*）
+  protectedText = protectedText.replace(/\*([^*]+)\*/g, (match, content) => {
+    markers.push({ type: 'em', content });
+    return `\x00${markers.length - 1}\x00`;
+  });
+
+  // Escape HTML 特殊字符
+  let html = escapeHtml(protectedText);
+
+  // 恢复并转换 Markdown 标记
+  for (let i = markers.length - 1; i >= 0; i--) {
+    const marker = markers[i];
+    let replacement = '';
+    const safeContent = escapeHtml(marker.content);
+    switch (marker.type) {
+      case 'strong': replacement = `<strong>${safeContent}</strong>`; break;
+      case 'em': replacement = `<em>${safeContent}</em>`; break;
+      case 'code': replacement = `<code>${safeContent}</code>`; break;
+    }
+    html = html.replace(`\x00${i}\x00`, replacement);
+  }
+
+  return html;
 }
 
 function escapeHtml(text) {

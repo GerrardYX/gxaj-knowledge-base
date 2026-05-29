@@ -1047,9 +1047,71 @@ html, body {
 }
 .message-bubble pre code { background: none; padding: 0; }
 
+/* Markdown 列表样式 */
 .message-bubble ul, .message-bubble ol {
-  padding-left: 20px;
-  margin: 8px 0;
+  padding-left: 22px;
+  margin: 10px 0;
+}
+
+.message-bubble ul {
+  list-style-type: disc;
+}
+
+.message-bubble ol {
+  list-style-type: decimal;
+}
+
+.message-bubble li {
+  margin-bottom: 6px;
+  line-height: 1.7;
+  padding-left: 4px;
+}
+
+.message-bubble li:last-child {
+  margin-bottom: 0;
+}
+
+/* Markdown 加粗 */
+.message-bubble strong {
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+/* Markdown 斜体 */
+.message-bubble em {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Markdown 标题 */
+.message-bubble h1,
+.message-bubble h2,
+.message-bubble h3 {
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 14px 0 8px;
+  line-height: 1.4;
+}
+
+.message-bubble h1 {
+  font-size: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.message-bubble h2 {
+  font-size: 15px;
+}
+
+.message-bubble h3 {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.message-bubble h1:first-child,
+.message-bubble h2:first-child,
+.message-bubble h3:first-child {
+  margin-top: 0;
 }
 
 .message-bubble blockquote {
