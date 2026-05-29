@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Cache GGUF model
@@ -29,8 +29,11 @@ jobs:
           restore-keys: |
             model-
 
+      - name: Clean npm cache
+        run: npm cache clean --force
+
       - name: Install dependencies
-        run: npm install
+        run: npm install --verbose
         env:
           NODE_LLAMA_CPP_SKIP_DOWNLOAD: "true"
 
