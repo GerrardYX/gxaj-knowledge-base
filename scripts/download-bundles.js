@@ -43,7 +43,7 @@ if (!platform || !arch) {
 // ─── 常量 ─────────────────────────────────────────────────────────────────
 const MODEL_CONFIG = {
   repo: 'Qwen/Qwen3-0.6B-GGUF',
-  file: 'qwen3-0.6b-q4_k_m.gguf',
+  file: 'Qwen3-0.6B-Q4_K_M.gguf',
   size: 500, // MB
 };
 

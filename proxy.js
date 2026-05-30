@@ -33,7 +33,7 @@ function findAvailablePort(basePort) {
 }
 
 // ─── 模型配置 ───────────────────────────────────────────────────────────────
-const MODEL_NAME = 'qwen3-0.6b-q4_k_m.gguf';
+const MODEL_NAME = 'Qwen3-0.6B-Q4_K_M.gguf';
 // 生产环境（打包后）：模型在 extraResources 中，主进程通过 RESOURCES_PATH 环境变量传递位置
 // 开发环境：模型与 proxy.js 同级目录 vendor/models/
 const BASE_DIR = process.env.RESOURCES_PATH || __dirname;

@@ -1,0 +1,7 @@
+{
+  "model": "qwen3-0.6b-q4_k_m.gguf",
+  "repo": "Qwen/Qwen3-0.6B-GGUF",
+  "size": 500,
+  "downloadedAt": "2026-05-29T09:22:13.139Z",
+  "note": "node-llama-cpp 二进制由 npm install 自动处理"
+}

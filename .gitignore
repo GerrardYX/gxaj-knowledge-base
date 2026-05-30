@@ -4,7 +4,10 @@ out/
 .DS_Store
 *.log
 .env
-vendor/
+vendor/models/*
+!vendor/models/*.gguf
+!vendor/models/*.gguf.part_*
+!vendor/models/META.json
 test-screenshots/
 *.blockmap
 .aider*
