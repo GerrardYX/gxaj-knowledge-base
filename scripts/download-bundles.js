@@ -49,17 +49,17 @@ const MODEL_CONFIG = {
 
 // 国内镜像源（速度更快）
 const MIRROR_SOURCES = [
+  // HF-Mirror（国内可用的 HF 镜像）
+  { name: 'hf-mirror', baseUrl: 'https://hf-mirror.com', getUrl: (cfg) =>
+    `https://hf-mirror.com/${cfg.repo}/resolve/main/${cfg.file}`
+  },
   // Modelscope
   { name: 'modelscope', baseUrl: 'https://modelscope.cn/models', getUrl: (cfg) =>
     `https://modelscope.cn/models/${cfg.repo}/resolve/master/${cfg.file}`
   },
-  // HuggingFace CDN（可能需要代理）
+  // HuggingFace CDN
   { name: 'huggingface', baseUrl: 'https://huggingface.co', getUrl: (cfg) =>
     `https://huggingface.co/${cfg.repo}/resolve/main/${cfg.file}`
-  },
-  // OpenCSG（国内可访问）
-  { name: 'opencsg', baseUrl: 'https://opencsg.com', getUrl: (cfg) =>
-    `https://opencsg.com/models/${cfg.repo}/resolve/main/${cfg.file}`
   },
 ];
 

@@ -22,8 +22,16 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Merge GGUF model parts
-        run: cat vendor/models/Qwen3-0.6B-Q4_K_M.gguf.part_* > vendor/models/Qwen3-0.6B-Q4_K_M.gguf
+      - name: Cache GGUF model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: vendor/models
+          key: gguf-model-v1
+
+      - name: Download model (cache miss)
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: node scripts/download-bundles.js --platform darwin --arch arm64
 
       - name: Install dependencies
         run: npm ci
@@ -31,7 +39,7 @@ jobs:
           NODE_LLAMA_CPP_SKIP_DOWNLOAD: "true"
 
       - name: Build macOS app
-        run: npm run build:mac
+        run: npx electron-builder --mac --x64 --arm64
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
