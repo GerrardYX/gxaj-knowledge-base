@@ -6,11 +6,8 @@
   "scripts": {
     "start": "node proxy.js",
     "dev": "electron .",
-    "prebuild:win": "node scripts/download-bundles.js --platform windows --arch amd64",
-    "prebuild:mac": "node scripts/download-bundles.js --platform darwin --arch arm64",
-    "prebuild:linux": "node scripts/download-bundles.js --platform linux --arch amd64",
-    "build:win": "npm run prebuild:win && electron-builder --win --x64",
-    "build:mac": "npm run prebuild:mac && electron-builder --mac --x64 --arm64",
+    "build:win": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac --x64 --arm64",
     "build:dir": "electron-builder --win --dir",
     "pack:kb": "node scripts/pack-kb.js",
     "pack:kb:mac": "node scripts/pack-kb.js --mac"

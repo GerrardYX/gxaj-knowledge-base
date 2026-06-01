@@ -22,17 +22,6 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Cache GGUF model
-        id: cache-model
-        uses: actions/cache@v4
-        with:
-          path: vendor/models
-          key: gguf-model-v1
-
-      - name: Download model (cache miss)
-        if: steps.cache-model.outputs.cache-hit != 'true'
-        run: node scripts/download-bundles.js --platform darwin --arch arm64
-
       - name: Install dependencies
         run: npm ci
         env:
