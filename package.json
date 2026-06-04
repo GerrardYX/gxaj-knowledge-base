@@ -41,7 +41,7 @@
         "to": "vendor/models"
       }
     ],
-    "asar": true,
+    "asar": false,
     "win": {
       "target": [
         "nsis",
