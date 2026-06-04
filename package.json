@@ -28,10 +28,8 @@
       "assets/**/*",
       "js/**/*",
       "css/**/*",
-      "build/**/*",
       "vendor/**/*",
       "!vendor/models/**",
-      "node_modules/**/*",
       "package.json"
     ],
     "extraResources": [

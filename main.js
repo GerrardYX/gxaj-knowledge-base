@@ -199,21 +199,22 @@ function createWindow() {
 app.whenReady().then(async () => {
   console.log('[App] 启动 gxaj知识库...');
 
-  // 启动 proxy 服务（包含模型加载）
-  startProxyServer();
-
-  try {
-    await waitForProxy(proxyPort, MAX_WAIT_MS);
-    console.log(`[App] Proxy 服务已就绪 (port ${proxyPort})`);
-    console.log('[App] 模型将在后台加载，请稍候...');
-  } catch (e) {
-    console.warn('[App] Proxy 启动超时，继续运行:', e.message);
-  }
-
+  // 1. 立即创建窗口（不等待 proxy），用户立刻看到界面
   createWindow();
 
-  // 启动模型状态轮询（每 3 秒推送一次状态给前端）
+  // 2. 并行启动 proxy + 模型加载
+  startProxyServer();
   startModelPolling();
+
+  // 3. 后台等待 proxy 就绪（非阻塞，仅为日志）
+  waitForProxy(proxyPort, MAX_WAIT_MS)
+    .then(() => {
+      console.log(`[App] Proxy 服务已就绪 (port ${proxyPort})`);
+      console.log('[App] 模型将在后台加载，请稍候...');
+    })
+    .catch((e) => {
+      console.warn('[App] Proxy 启动超时，继续运行:', e.message);
+    });
 });
 
 app.on('window-all-closed', () => {
