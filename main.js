@@ -30,10 +30,20 @@ app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256'); // 限制 
 app.commandLine.appendSwitch('no-sandbox');          // 禁用 sandbox（减少进程开销）
 app.disableHardwareAcceleration();                     // 完全禁用硬件加速，降低 CPU/GPU 占用
 
+// ─── 获取 proxy.js 的实际文件路径 ──────────────────────────────────────────────
+function getProxyPath() {
+  if (app.isPackaged) {
+    // 打包后：proxy.js 通过 asarUnpack 解包到 app.asar.unpacked 目录
+    return path.join(process.resourcesPath, 'app.asar.unpacked', 'proxy.js');
+  }
+  // 开发环境
+  return path.join(__dirname, 'proxy.js');
+}
+
 // ─── 启动后端代理服务 ────────────────────────────────────────────────────────
 function startProxyServer() {
   const nodeExe = process.platform === 'win32' ? 'node.exe' : 'node';
-  const proxyPath = path.join(app.getAppPath(), 'proxy.js');
+  const proxyPath = getProxyPath();
 
   proxyProcess = spawn(nodeExe, [proxyPath], {
     stdio: ['ignore', 'pipe', 'pipe'],
