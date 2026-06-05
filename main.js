@@ -14,8 +14,10 @@ let proxyProcess;
 let proxyPort = 3001; // 实际端口（proxy 可能自动递增）
 const PROXY_PORT = 3001;
 const MAX_WAIT_MS = 15000; // 等待 proxy 启动的最长时间
-const MODEL_POLL_INTERVAL = 3000; // 模型状态轮询间隔（毫秒）
+const MODEL_POLL_INTERVAL = 2000; // 模型状态轮询间隔（毫秒），降低到2秒让状态切换更及时
 let modelPollTimer = null;
+let proxyConnected = false;  // proxy HTTP 服务是否已连上过
+let modelWasReady = false;   // 模型是否曾就绪（避免重复 toast）
 
 // ─── 性能优化：针对赛扬CPU+4GB内存 ───────────────────────────────────────────
 app.commandLine.appendSwitch('disable-gpu');           // 彻底禁用 GPU 进程
@@ -86,19 +88,104 @@ function waitForProxy(port, timeout) {
 function pollModelStatus() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
+  // Proxy 进程已退出 → 发送错误
+  if (proxyProcess && proxyProcess.exitCode !== null) {
+    mainWindow.webContents.send('model-status', {
+      ready: false,
+      loading: false,
+      error: '推理服务已退出',
+      message: '推理服务意外退出',
+      progress: 0
+    });
+    return;
+  }
+
   http.get(`http://127.0.0.1:${proxyPort}/api/model-status`, (res) => {
     let data = '';
     res.on('data', chunk => { data += chunk; });
     res.on('end', () => {
       try {
         const status = JSON.parse(data);
-        mainWindow.webContents.send('model-status', status);
+        proxyConnected = true;
+
+        if (status.ready) {
+          modelWasReady = true;
+        }
+
+        // 如果模型已就绪过一次，后续只推送 ready=true（不重复发 progress）
+        if (modelWasReady && status.ready) {
+          mainWindow.webContents.send('model-status', {
+            ready: true,
+            loading: false,
+            model: status.model,
+            error: null,
+            message: '模型就绪',
+            progress: 100
+          });
+          return;
+        }
+
+        // 如果模型在加载中，转发进度
+        if (status.loading) {
+          mainWindow.webContents.send('model-status', {
+            ready: false,
+            loading: true,
+            model: status.model,
+            error: null,
+            message: status.message || '正在加载模型...',
+            progress: status.progress || 0
+          });
+          return;
+        }
+
+        // 模型加载失败
+        if (status.error) {
+          mainWindow.webContents.send('model-status', {
+            ready: false,
+            loading: false,
+            model: status.model,
+            error: status.error,
+            message: status.message || status.error,
+            progress: 0
+          });
+          return;
+        }
+
+        // 模型未就绪且未加载（刚连上但还没开始加载）
+        mainWindow.webContents.send('model-status', {
+          ready: false,
+          loading: true,
+          model: status.model,
+          error: null,
+          message: '推理服务已启动，准备加载模型...',
+          progress: 5
+        });
       } catch {
-        mainWindow.webContents.send('model-status', { ready: false, loading: false, error: '状态解析失败' });
+        mainWindow.webContents.send('model-status', {
+          ready: false, loading: false,
+          error: '状态解析失败', message: '状态解析失败', progress: 0
+        });
       }
     });
   }).on('error', () => {
-    mainWindow.webContents.send('model-status', { ready: false, loading: false, error: 'Proxy 未响应' });
+    // Proxy 还没连上过 → 显示"正在启动"而不是错误
+    if (!proxyConnected) {
+      mainWindow.webContents.send('model-status', {
+        ready: false,
+        loading: true,
+        message: '正在启动推理服务...',
+        progress: 0
+      });
+    } else {
+      // Proxy 曾连上但现在断了
+      mainWindow.webContents.send('model-status', {
+        ready: false,
+        loading: false,
+        error: '推理服务连接断开',
+        message: '推理服务连接断开，尝试重连...',
+        progress: 0
+      });
+    }
   });
 }
 
@@ -117,8 +204,14 @@ function stopModelPolling() {
 
 // ─── IPC 处理 ───────────────────────────────────────────────────────────────
 
-// 获取模型状态
+// 获取模型状态（IPC handle，加入连接状态判断）
 ipcMain.handle('get-model-status', async () => {
+  if (!proxyConnected) {
+    return { ready: false, loading: true, message: '正在启动推理服务...', progress: 0 };
+  }
+  if (proxyProcess && proxyProcess.exitCode !== null) {
+    return { ready: false, loading: false, error: '推理服务已退出', message: '推理服务意外退出' };
+  }
   return new Promise((resolve) => {
     http.get(`http://127.0.0.1:${proxyPort}/api/model-status`, (res) => {
       let data = '';
@@ -131,13 +224,17 @@ ipcMain.handle('get-model-status', async () => {
         }
       });
     }).on('error', () => {
-      resolve({ ready: false, error: 'Proxy 未运行' });
+      resolve({ ready: false, loading: true, message: '正在启动推理服务...', progress: 0 });
     });
   });
 });
 
 // 重启模型（当模型加载失败时）
 ipcMain.handle('restart-model', async () => {
+  // 重置状态
+  proxyConnected = false;
+  modelWasReady = false;
+
   // 杀掉旧的 proxy 进程
   if (proxyProcess) {
     proxyProcess.kill('SIGTERM');
@@ -145,6 +242,13 @@ ipcMain.handle('restart-model', async () => {
   }
   // 重启
   startProxyServer();
+  // 通知前端正在重启
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('model-status', {
+      ready: false, loading: true,
+      message: '正在重启推理服务...', progress: 0
+    });
+  }
   try {
     await waitForProxy(proxyPort, MAX_WAIT_MS);
     return { success: true };
@@ -202,13 +306,24 @@ app.whenReady().then(async () => {
   // 1. 立即创建窗口（不等待 proxy），用户立刻看到界面
   createWindow();
 
-  // 2. 并行启动 proxy + 模型加载
+  // 2. 立即发送初始状态，让前端显示"正在启动"
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('model-status', {
+      ready: false,
+      loading: true,
+      message: '正在启动推理服务...',
+      progress: 0
+    });
+  }
+
+  // 3. 并行启动 proxy + 模型加载
   startProxyServer();
   startModelPolling();
 
-  // 3. 后台等待 proxy 就绪（非阻塞，仅为日志）
+  // 4. 后台等待 proxy 就绪（非阻塞，仅为日志）
   waitForProxy(proxyPort, MAX_WAIT_MS)
     .then(() => {
+      proxyConnected = true;
       console.log(`[App] Proxy 服务已就绪 (port ${proxyPort})`);
       console.log('[App] 模型将在后台加载，请稍候...');
     })

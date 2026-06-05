@@ -28,6 +28,7 @@
       "assets/**/*",
       "js/**/*",
       "css/**/*",
+      "build/**/*",
       "vendor/**/*",
       "!vendor/models/**",
       "package.json"

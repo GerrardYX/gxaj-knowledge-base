@@ -46,6 +46,8 @@ let chatSession = null;
 let modelReady = false;
 let modelLoading = false;
 let modelError = null;
+let modelProgress = 0;
+let modelMessage = '正在初始化...';
 
 // ─── IPC 通知（如果 Electron 可用）──────────────────────────────────────────
 function notifyRenderer(channel, data) {
@@ -67,31 +69,23 @@ async function initModel() {
 
   modelLoading = true;
   modelError = null;
+  modelProgress = 5;
+  modelMessage = '正在初始化推理引擎...';
   console.log('[Model] 正在初始化本地模型...');
   console.log(`[Model] 模型路径: ${MODEL_PATH}`);
-
-  // 通知渲染进程：开始加载
-  notifyRenderer('model-progress', {
-    status: 'loading',
-    message: '正在加载向量模型...',
-    progress: 0
-  });
 
   try {
     // 动态导入 node-llama-cpp
     const { getLlama, LlamaChatSession } = await import('node-llama-cpp');
 
     // 初始化 llama.cpp 运行时
+    modelProgress = 20;
+    modelMessage = '正在配置推理运行时...';
     llama = await getLlama();
 
-    // 通知进度
-    notifyRenderer('model-progress', {
-      status: 'loading',
-      message: '正在加载模型文件（首次可能需要几分钟）...',
-      progress: 30
-    });
-
     // 加载模型
+    modelProgress = 35;
+    modelMessage = '正在加载模型文件（首次可能需要几分钟）...';
     console.log('[Model] 加载 GGUF 模型（首次可能需要几分钟）...');
     chatModel = await llama.loadModel({
       modelPath: MODEL_PATH,
@@ -99,14 +93,9 @@ async function initModel() {
       contextSize: 512,  // 4GB RAM 友好
     });
 
-    // 通知进度
-    notifyRenderer('model-progress', {
-      status: 'loading',
-      message: '正在创建推理上下文...',
-      progress: 70
-    });
-
-    // 创建会话
+    // 创建上下文
+    modelProgress = 75;
+    modelMessage = '正在创建推理上下文...';
     const context = await chatModel.createContext();
     chatSession = new LlamaChatSession({
       contextSequence: context.getSequence()
@@ -114,41 +103,17 @@ async function initModel() {
 
     modelReady = true;
     modelLoading = false;
+    modelProgress = 100;
+    modelMessage = '模型加载完成，可以开始对话';
     console.log('[Model] ✅ 模型加载完成');
-
-    // 通知渲染进程：模型就绪
-    notifyRenderer('model-status', {
-      ready: true,
-      loading: false,
-      model: MODEL_NAME,
-      error: null
-    });
-
-    notifyRenderer('model-progress', {
-      status: 'ready',
-      message: '模型加载完成，可以开始对话',
-      progress: 100
-    });
 
   } catch (err) {
     modelLoading = false;
     modelError = err.message;
+    modelProgress = 0;
+    modelMessage = '模型加载失败';
     console.error('[Model] ❌ 模型加载失败:', err.message);
     console.error('[Model] 将降级到 NVIDIA API');
-
-    // 通知渲染进程：加载失败
-    notifyRenderer('model-status', {
-      ready: false,
-      loading: false,
-      model: MODEL_NAME,
-      error: err.message
-    });
-
-    notifyRenderer('model-progress', {
-      status: 'error',
-      message: `模型加载失败: ${err.message}`,
-      progress: 0
-    });
   }
 }
 
@@ -170,7 +135,9 @@ app.get('/api/model-status', (req, res) => {
     ready: modelReady,
     loading: modelLoading,
     model: MODEL_NAME,
-    error: modelError
+    error: modelError,
+    progress: modelProgress,
+    message: modelMessage
   });
 });
 

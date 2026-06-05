@@ -11,6 +11,7 @@ const state = {
   currentConversationId: null,
   isEmbeddingModelReady: false,
   modelReadyNotified: false,
+  modelErrorNotified: false,
   lastUserQuery: '',        // 最后一次用户提问（用于重新生成）
   perfModeLow: false,       // 低性能模式开关
   lastSearchResults: [],     // 最后一次搜索结果（用于来源标签）
@@ -2028,6 +2029,7 @@ function initModelStatusListener() {
 /**
  * 根据模型状态更新进度条 UI
  * @param {Object} status - 主进程推送的状态对象
+ *   { ready, loading, error, model, progress, message }
  */
 function updateModelProgressUI(status) {
   const container = document.getElementById('ollama-progress');
@@ -2038,31 +2040,29 @@ function updateModelProgressUI(status) {
   const textEl = document.getElementById('progress-text');
   const statusEl = document.getElementById('progress-status');
 
-  // 模型加载中
-  if (status.loading || status.modelPull) {
+  // 模型加载中（包括 proxy 启动阶段）
+  if (status.loading) {
     container.classList.remove('hidden');
     if (modelEl) modelEl.textContent = status.model || 'Qwen3-0.6B';
     if (fillEl) {
-      // indeterminate 动画表示正在加载
-      fillEl.style.width = status.percent >= 0 ? status.percent + '%' : '30%';
+      const pct = (status.progress != null) ? status.progress + '%' : '30%';
+      fillEl.style.width = pct;
       fillEl.classList.add('indeterminate');
     }
-    if (textEl) textEl.textContent = status.percent >= 0 ? status.percent + '%' : '加载中...';
-    if (statusEl) statusEl.textContent = status.status || '初始化...';
+    if (textEl) textEl.textContent = (status.progress != null && status.progress > 0) ? status.progress + '%' : '';
+    if (statusEl) statusEl.textContent = status.message || '初始化...';
     return;
   }
 
   // 模型就绪
   if (status.ready) {
-    if (fillEl) fillEl.style.width = '100%';
+    if (fillEl) { fillEl.style.width = '100%'; fillEl.classList.remove('indeterminate'); }
     if (textEl) textEl.textContent = '就绪';
     if (statusEl) statusEl.textContent = '';
     if (modelEl) modelEl.textContent = status.model || 'Qwen3-0.6B';
     // 2秒后自动隐藏
-    setTimeout(() => {
-      container.classList.add('hidden');
-    }, 2000);
-    // 只弹一次 toast，避免轮询重复通知
+    setTimeout(() => { container.classList.add('hidden'); }, 2000);
+    // 只弹一次 toast
     if (!state.modelReadyNotified) {
       state.modelReadyNotified = true;
       showToast('AI模型加载完成', 'success');
@@ -2070,20 +2070,19 @@ function updateModelProgressUI(status) {
     return;
   }
 
-  // 模型未就绪且已停止加载（失败或不存在）
-  if (!status.loading && !status.ready) {
+  // 模型未就绪且已停止加载（失败）
+  if (!status.loading && !status.ready && status.error) {
     container.classList.remove('hidden');
     if (modelEl) modelEl.textContent = status.model || 'Qwen3-0.6B';
     if (fillEl) {
       fillEl.style.width = '0%';
       fillEl.classList.remove('indeterminate');
     }
-    if (textEl) textEl.textContent = '未就绪';
-    if (status.error) {
-      if (statusEl) statusEl.textContent = status.error;
-      showToast(`模型加载失败: ${status.error}`, 'error');
-    } else {
-      if (statusEl) statusEl.textContent = '本地模型未安装，将使用云端 API';
+    if (textEl) textEl.textContent = '失败';
+    if (statusEl) statusEl.textContent = status.message || status.error;
+    if (!state.modelErrorNotified) {
+      state.modelErrorNotified = true;
+      showToast(`加载失败: ${status.error}`, 'error');
     }
     return;
   }
