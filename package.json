@@ -34,13 +34,17 @@
       "package.json"
     ],
     "extraResources": [
-      "assets",
       {
         "from": "vendor/models",
-        "to": "vendor/models"
+        "to": "vendor/models",
+        "filter": ["**/*", "!*.part_*"]
       }
     ],
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "proxy.js",
+      "node_modules/**/*"
+    ],
     "win": {
       "target": [
         "nsis",
