@@ -226,13 +226,18 @@ window.removeConversation = async function(id) {
 
 // ============ 初始化 ============
 document.addEventListener('DOMContentLoaded', () => {
+  if (window.__perfLog__) window.__perfLog__('DOMContentLoaded');
   try {
+    if (window.__perfLog__) window.__perfLog__('about to call initElements()');
     initElements();
+    if (window.__perfLog__) window.__perfLog__('initElements done');
     initEventListeners();
 
     // 直接初始化应用（无需登录）
     state.currentUser = { displayName: '用户' };  // 兼容性设置
+    if (window.__perfLog__) window.__perfLog__('about to call initApp()');
     initApp();
+    if (window.__perfLog__) window.__perfLog__('initApp() done — UI fully ready');
 
     // 页面卸载时清理定时器，防止内存泄漏
     window.addEventListener('beforeunload', () => {

@@ -7,6 +7,21 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+logTimepoint('express/cors/path loaded');
+
+// 启动耗时埋点（写到与主进程相同的 tmp 文件，附 PID）
+const T0 = Date.now();
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const PERF_LOG = path.join(os.tmpdir(), 'gxaj-startup.log');
+function logTimepoint(label) {
+  const ms = Date.now() - T0;
+  const line = `[${new Date().toISOString()}] proxy+${ms}ms  ${label}\n`;
+  process.stderr.write(line);
+  try { fs.appendFileSync(PERF_LOG, line); } catch {}
+}
+logTimepoint('proxy.js loaded');
 
 const app = express();
 app.use(cors());
@@ -408,7 +423,9 @@ app.post('/api/init-model', async (req, res) => {
 
 // ─── 启动 ───────────────────────────────────────────────────────────────────
 (async () => {
+  logTimepoint('app startup IIFE begin');
   const port = await findAvailablePort(PORT);
+  logTimepoint(`port resolved: ${port}`);
 
   app.listen(port, async () => {
     console.log(`

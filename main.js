@@ -9,6 +9,19 @@ const path = require('path');
 const { fork } = require('child_process');
 const http = require('http');
 
+// 启动耗时埋点（写入 userData/startup.log + 同步 flush）
+const T0 = Date.now();
+const fs = require('fs');
+const PERF_LOG = path.join(require('os').tmpdir(), 'gxaj-startup.log');
+try { fs.writeFileSync(PERF_LOG, ''); } catch {}
+function logTimepoint(label) {
+  const ms = Date.now() - T0;
+  const line = `[${new Date().toISOString()}] +${ms}ms  ${label}\n`;
+  console.log('[PERF]', line.trim());
+  try { fs.appendFileSync(PERF_LOG, line); } catch {}
+}
+logTimepoint('main.js loaded');
+
 // 安全地结束子进程（兼容 Windows，SIGTERM 不可用）
 function killChildProcess(child) {
   if (!child || child.exitCode !== null) return;
@@ -34,20 +47,30 @@ let modelPollTimer = null;
 let proxyConnected = false;  // proxy HTTP 服务是否已连上过
 let modelWasReady = false;   // 模型是否曾就绪（避免重复 toast）
 
-// ─── 性能优化：针对赛扬CPU+4GB内存 ───────────────────────────────────────────
-app.commandLine.appendSwitch('disable-gpu');           // 彻底禁用 GPU 进程
-app.commandLine.appendSwitch('disable-software-rasterizer'); // 禁用软件光栅化（CPU节约）
-app.commandLine.appendSwitch('disable-accelerated-2d-canvas'); // 禁用 2D canvas 加速
-app.commandLine.appendSwitch('disable-gpu-compositing'); // 禁用 GPU 合成（关键！防 WindowServer 泄漏）
-app.commandLine.appendSwitch('disable-dev-shm-usage'); // 禁用 /dev/shm 共享内存
-app.commandLine.appendSwitch('enable-zero-copy');      // 零拷贝，减少内存拷贝
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256'); // 限制 JS 堆 256MB
-app.commandLine.appendSwitch('no-sandbox');          // 禁用 sandbox（减少进程开销）
-app.disableHardwareAcceleration();                     // 完全禁用硬件加速，降低 CPU/GPU 占用
+// ─── 性能优化 ───────────────────────────────────────────────────────────────
+// 在用户机器上实测时，发现过度禁用 GPU 在某些场景反而更慢。
+// 保留最保守的设置，等根因定位后再调整。
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-dev-shm-usage');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=1024');
+// 不在这里 disableHardwareAcceleration（赛扬场景才需要，旗舰机反而拖慢）
+
+// ─── 获取 proxy.js 的实际文件路径（兼容 asar 打包）───────────────────────────
+function getProxyPath() {
+  if (app.isPackaged) {
+    // 打包后：proxy.js 通过 asarUnpack 解包到 app.asar.unpacked 目录
+    return path.join(process.resourcesPath, 'app.asar.unpacked', 'proxy.js');
+  }
+  // 开发环境：proxy.js 与 main.js 同级
+  return path.join(__dirname, 'proxy.js');
+}
 
 // ─── 启动后端代理服务 ────────────────────────────────────────────────────────
 function startProxyServer() {
-  const proxyPath = path.join(app.getAppPath(), 'proxy.js');
+  logTimepoint('startProxyServer() called');
+  const proxyPath = getProxyPath();
+  logTimepoint(`proxyPath resolved: ${proxyPath}`);
 
   // 使用 fork 而非 spawn('node.exe') —— 客户电脑无需安装 Node.js
   // fork 自动使用 Electron 内嵌的 Node.js 运行时，打包后的 .exe 直接可用
@@ -309,6 +332,9 @@ ipcMain.handle('init-model', async () => {
 
 // ─── 创建主窗口 ─────────────────────────────────────────────────────────────
 function createWindow() {
+  logTimepoint('createWindow() called');
+  const preloadPath = path.join(__dirname, 'preload.js');
+  logTimepoint(`preload path: ${preloadPath}, exists in asar.unpacked=${require('fs').existsSync(preloadPath)}`);
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -316,7 +342,7 @@ function createWindow() {
     minHeight: 600,
     // 性能优化参数
     backgroundColor: '#0f0f1a',
-    show: false,
+    show: true,                   // 立即显示窗口（不再等 ready-to-show，加速首屏）
     icon: path.join(__dirname, 'build/logo_gxaj.jpg'),
     webPreferences: {
       nodeIntegration: false,
@@ -327,15 +353,30 @@ function createWindow() {
       enableWebSQL: false,         // 禁用 WebSQL
       webgl: false,                // 禁用 WebGL，降低 GPU 占用
       images: true,                // 启用图片显示
-      backgroundThrottling: true,   // 后台节流
+      // 关键性能优化
+      backgroundThrottling: false,  // 不节流，加快首屏渲染
+      enablePreferredSizeMode: false, // 禁用（4GB RAM）
     },
     title: 'gxaj知识库',
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  logTimepoint('loadFile() called');
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+  mainWindow.webContents.on('preload-error', (event, preloadPath, error) => {
+    logTimepoint(`preload-error: ${preloadPath}, ${error.message}`);
+  });
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (message.includes('[PERF]') || message.includes('preload')) {
+      logTimepoint(`console: ${message}`);
+    }
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    logTimepoint('webContents did-finish-load');
+  });
+  mainWindow.webContents.on('dom-ready', () => {
+    logTimepoint('webContents dom-ready');
   });
 
   mainWindow.on('closed', () => {
@@ -351,6 +392,8 @@ function createWindow() {
 
 // ─── 应用生命周期 ────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
+  logTimepoint('app.whenReady fired');
+  logTimepoint(`app.isPackaged=${app.isPackaged}, resourcesPath=${process.resourcesPath}`);
   console.log('[App] 启动 gxaj知识库...');
 
   // 1. 立即创建窗口（不等待 proxy），用户立刻看到界面

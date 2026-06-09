@@ -246,6 +246,16 @@
   </div>
 
   <!-- 脚本 — defer 异步加载，先渲染页面再执行 -->
+  <script>
+    // 浏览器端埋点：直接写入 %TEMP%\gxaj-frontend.log（用 node 写文件 API，preload 注入）
+    window.__APP_T0__ = Date.now();
+    window.__perfLog__ = (label) => {
+      const ms = Date.now() - window.__APP_T0__;
+      console.log(`[PERF] +${ms}ms  ${label}`);
+      if (window.gxajPerfLog) window.gxajPerfLog(`[fe] +${ms}ms  ${label}\n`);
+    };
+    window.__perfLog__('html inline script');
+  </script>
   <script src="js/db.js?v=3.0" defer></script>
   <script src="js/api.js?v=2.1" defer></script>
   <script src="js/parser.js?v=2.1" defer></script>

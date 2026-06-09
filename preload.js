@@ -4,6 +4,18 @@
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
+const { appendFileSync } = require('fs');
+const { join } = require('path');
+const { tmpdir } = require('os');
+
+const PERF_LOG_PATH = join(tmpdir(), 'gxaj-startup.log');
+function perfLog(line) {
+  try { appendFileSync(PERF_LOG_PATH, `[${new Date().toISOString()}] ${line}\n`); } catch {}
+}
+perfLog('preload.js loaded');
+
+// 把 perfLog 暴露给前端
+contextBridge.exposeInMainWorld('gxajPerfLog', perfLog);
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // 运行平台标识

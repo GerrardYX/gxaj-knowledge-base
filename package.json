@@ -42,6 +42,7 @@
     ],
     "asar": true,
     "asarUnpack": [
+      "preload.js",
       "proxy.js",
       "node_modules/**/*"
     ],
@@ -51,7 +52,8 @@
         "portable"
       ],
       "icon": "build/icon.ico",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "artifactName": "gxaj知识库-Setup-${version}.${ext}"
     },
     "mac": {
       "category": "public.app-category.utilities",
@@ -80,6 +82,7 @@
       "shortcutName": "gxaj知识库",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
+      "include": "build/installer.nsh",
       "license": null
     },
     "publish": null
