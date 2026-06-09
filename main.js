@@ -6,15 +6,30 @@
 
 const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { fork } = require('child_process');
 const http = require('http');
+
+// 安全地结束子进程（兼容 Windows，SIGTERM 不可用）
+function killChildProcess(child) {
+  if (!child || child.exitCode !== null) return;
+  try {
+    if (process.platform === 'win32') {
+      // Windows 不支持 SIGTERM，直接 kill
+      child.kill();
+    } else {
+      child.kill('SIGTERM');
+    }
+  } catch {
+    // 忽略 kill 异常
+  }
+}
 
 let mainWindow;
 let proxyProcess;
 let proxyPort = 3001; // 实际端口（proxy 可能自动递增）
 const PROXY_PORT = 3001;
-const MAX_WAIT_MS = 15000; // 等待 proxy 启动的最长时间
-const MODEL_POLL_INTERVAL = 2000; // 模型状态轮询间隔（毫秒），降低到2秒让状态切换更及时
+const MAX_WAIT_MS = 8000; // 等待 proxy 启动的最长时间（proxy 现在启动即响应，无需等模型）
+const MODEL_POLL_INTERVAL = 1500; // 模型状态轮询间隔（毫秒），更频繁刷新进度条
 let modelPollTimer = null;
 let proxyConnected = false;  // proxy HTTP 服务是否已连上过
 let modelWasReady = false;   // 模型是否曾就绪（避免重复 toast）
@@ -32,12 +47,12 @@ app.disableHardwareAcceleration();                     // 完全禁用硬件加�
 
 // ─── 启动后端代理服务 ────────────────────────────────────────────────────────
 function startProxyServer() {
-  const nodeExe = process.platform === 'win32' ? 'node.exe' : 'node';
   const proxyPath = path.join(app.getAppPath(), 'proxy.js');
 
-  proxyProcess = spawn(nodeExe, [proxyPath], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: false,
+  // 使用 fork 而非 spawn('node.exe') —— 客户电脑无需安装 Node.js
+  // fork 自动使用 Electron 内嵌的 Node.js 运行时，打包后的 .exe 直接可用
+  proxyProcess = fork(proxyPath, [], {
+    silent: true,  // 子进程的 stdout/stderr 可通过管道读取
     env: { ...process.env, PORT: String(PROXY_PORT), RESOURCES_PATH: process.resourcesPath || '' }
   });
 
@@ -236,8 +251,8 @@ ipcMain.handle('restart-model', async () => {
   modelWasReady = false;
 
   // 杀掉旧的 proxy 进程
+  killChildProcess(proxyProcess);
   if (proxyProcess) {
-    proxyProcess.kill('SIGTERM');
     await new Promise(r => setTimeout(r, 1000));
   }
   // 重启
@@ -255,6 +270,41 @@ ipcMain.handle('restart-model', async () => {
   } catch (err) {
     return { success: false, error: err.message };
   }
+});
+
+// 按需加载模型（首次提问时触发）
+ipcMain.handle('init-model', async () => {
+  if (!proxyConnected) {
+    return { success: false, error: '推理服务尚未就绪' };
+  }
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({});
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port: proxyPort,
+      path: '/api/init-model',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const result = JSON.parse(data);
+          // 启动轮询以获取加载进度
+          startModelPolling();
+          resolve({ success: true, ...result });
+        } catch {
+          resolve({ success: false, error: '解析失败' });
+        }
+      });
+    });
+    req.on('error', () => {
+      resolve({ success: false, error: '请求失败' });
+    });
+    req.write(postData);
+    req.end();
+  });
 });
 
 // ─── 创建主窗口 ─────────────────────────────────────────────────────────────
@@ -306,7 +356,7 @@ app.whenReady().then(async () => {
   // 1. 立即创建窗口（不等待 proxy），用户立刻看到界面
   createWindow();
 
-  // 2. 立即发送初始状态，让前端显示"正在启动"
+  // 2. 立即发送初始状态，告诉前端服务正在启动
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('model-status', {
       ready: false,
@@ -316,16 +366,28 @@ app.whenReady().then(async () => {
     });
   }
 
-  // 3. 并行启动 proxy + 模型加载
+  // 3. 启动 proxy（不加载模型，按需加载模式）
   startProxyServer();
-  startModelPolling();
+  // 注: 不再自动启动模型轮询，模型将在首次提问时按需加载
+  // startModelPolling 将在 init-model IPC 被调用时启动
 
   // 4. 后台等待 proxy 就绪（非阻塞，仅为日志）
   waitForProxy(proxyPort, MAX_WAIT_MS)
     .then(() => {
       proxyConnected = true;
       console.log(`[App] Proxy 服务已就绪 (port ${proxyPort})`);
-      console.log('[App] 模型将在后台加载，请稍候...');
+      console.log('[App] 模型将在首次提问时按需加载（加快启动速度）');
+
+      // 通知前端：服务就绪，模型待加载
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('model-status', {
+          ready: false,
+          loading: false,
+          model: 'Qwen3-0.6B',
+          message: '服务就绪，模型待加载',
+          progress: 0
+        });
+      }
     })
     .catch((e) => {
       console.warn('[App] Proxy 启动超时，继续运行:', e.message);
@@ -335,9 +397,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   // 停止轮询和 proxy 进程
   stopModelPolling();
-  if (proxyProcess) {
-    proxyProcess.kill('SIGTERM');
-  }
+  killChildProcess(proxyProcess);
   if (process.platform !== 'darwin') {
     app.quit();
   }

@@ -16,6 +16,8 @@ const state = {
   perfModeLow: false,       // 低性能模式开关
   lastSearchResults: [],     // 最后一次搜索结果（用于来源标签）
   lastMatchedDocs: [],      // 最后一次匹配的文档名（用于来源标签）
+  modelReady: false,        // 本地推理模型是否已加载就绪（懒加载模式）
+  pendingQuery: null,       // 等待模型加载完成后要执行的查询
 };
 
 // ============ DOM 元素 ============
@@ -381,20 +383,49 @@ function initApp() {
 }
 
 // ============ 聊天相关 ============
-function handleSendMessage() {
+async function handleSendMessage() {
   const content = elements.messageInput.value.trim();
   
   if (!content || state.isTyping) return;
   
-  // 添加用户消息
+  // 如果模型未就绪且在 Electron 中，触发按需加载
+  if (!state.modelReady && window.electronAPI && window.electronAPI.initModel) {
+    // 加载未开始 → 触发按需加载
+    if (!state.pendingQuery) {
+      addMessage('user', content);
+      elements.messageInput.value = '';
+      autoResizeTextarea();
+      elements.welcomeArea.style.display = 'none';
+
+      // 显示模型加载提示消息
+      showModelLoadingMessage();
+      state.pendingQuery = content;
+
+      // 触发模型加载
+      try {
+        const result = await window.electronAPI.initModel();
+        if (!result.success) {
+          showToast('模型加载失败: ' + (result.error || '未知错误'), 'error');
+          state.pendingQuery = null;
+          removeModelLoadingMessage();
+        }
+      } catch (e) {
+        console.error('[App] 触发模型加载失败:', e);
+        state.pendingQuery = null;
+        removeModelLoadingMessage();
+      }
+      return;
+    }
+    // 模型正在加载中 → 提示用户等待
+    showToast('模型正在加载中，请稍候...', 'info');
+    return;
+  }
+  
+  // 若不在 Electron 或模型已就绪，直接发送
   addMessage('user', content);
   elements.messageInput.value = '';
   autoResizeTextarea();
-  
-  // 隐藏欢迎区域
   elements.welcomeArea.style.display = 'none';
-  
-  // 发送请求
   sendToAI(content);
 }
 
@@ -1527,7 +1558,7 @@ function loadDocuments() {
         console.log('[Load] 从 IndexedDB 恢复了', state.documents.length, '个文档');
         renderFileList();
         updateKnowledgeStatus();
-        preloadEmbeddingModel();
+        // embedding 模型延迟加载：等用户首次提问或上传文档时再加载
       } else {
         // IndexedDB 也为空，尝试 localStorage 迁移
         loadFromLocalStorageFallback();
@@ -1585,7 +1616,7 @@ function loadFromLocalStorageFallback() {
 
         renderFileList();
         updateKnowledgeStatus();
-        preloadEmbeddingModel();
+        // embedding 模型延迟加载
         return;
       }
     } catch (e) {
@@ -1598,16 +1629,12 @@ function loadFromLocalStorageFallback() {
     loadKnowledgeFilesFromAssets().then(() => {
       renderFileList();
       updateKnowledgeStatus();
-      if (state.documents.length > 0) {
-        preloadEmbeddingModel();
-      }
+      // embedding 模型延迟加载
     });
   } else {
     renderFileList();
     updateKnowledgeStatus();
-    if (state.documents.length > 0) {
-      preloadEmbeddingModel();
-    }
+    // embedding 模型延迟加载
   }
 }
 
@@ -2004,6 +2031,41 @@ function showToast(message, type = 'info') {
  * 监听本地模型状态事件（加载进度、运行状态等）
  * 由主进程通过 preload.js 的 IPC 桥接推送
  */
+/**
+ * 显示模型加载中消息（用户提问后触发按需加载时）
+ */
+function showModelLoadingMessage() {
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'message model-loading-msg';
+  loadingDiv.id = 'modelLoadingMessage';
+  loadingDiv.innerHTML = `
+    <div class="message-avatar">
+      <img src="build/logo_gxaj.jpg" alt="AI" style="width:100%;height:100%;object-fit:contain;border-radius:var(--radius);">
+    </div>
+    <div class="message-content">
+      <div class="message-bubble" style="background:var(--surface-secondary);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="loading-spinner" style="width:16px;height:16px;border-width:2px;"></div>
+          <span>正在加载AI模型（首次约需15-30秒）...</span>
+        </div>
+        <div style="margin-top:8px;font-size:0.8rem;opacity:0.7;">
+          加载完成后将自动回答您的问题。在此期间您可以上传文档到知识库。
+        </div>
+      </div>
+    </div>
+  `;
+  elements.messageList.appendChild(loadingDiv);
+  scrollToBottom();
+}
+
+/**
+ * 移除模型加载中消息
+ */
+function removeModelLoadingMessage() {
+  const el = document.getElementById('modelLoadingMessage');
+  if (el) el.remove();
+}
+
 function initModelStatusListener() {
   if (!window.electronAPI || !window.electronAPI.onModelStatus) {
     // 非 Electron 环境（浏览器测试），跳过
@@ -2056,22 +2118,38 @@ function updateModelProgressUI(status) {
 
   // 模型就绪
   if (status.ready) {
+    state.modelReady = true;
     if (fillEl) { fillEl.style.width = '100%'; fillEl.classList.remove('indeterminate'); }
     if (textEl) textEl.textContent = '就绪';
     if (statusEl) statusEl.textContent = '';
     if (modelEl) modelEl.textContent = status.model || 'Qwen3-0.6B';
     // 2秒后自动隐藏
-    setTimeout(() => { container.classList.add('hidden'); }, 2000);
+    const progressContainer = container;
+    setTimeout(() => { progressContainer.classList.add('hidden'); }, 2000);
     // 只弹一次 toast
     if (!state.modelReadyNotified) {
       state.modelReadyNotified = true;
       showToast('AI模型加载完成', 'success');
+    }
+    // 如果有等待的查询（懒加载模式下用户先提问了），自动执行
+    if (state.pendingQuery) {
+      const query = state.pendingQuery;
+      state.pendingQuery = null;
+      removeModelLoadingMessage();
+      console.log('[App] 模型就绪，自动执行等待中的查询:', query);
+      sendToAI(query);
     }
     return;
   }
 
   // 模型未就绪且已停止加载（失败）
   if (!status.loading && !status.ready && status.error) {
+    // 清除等待的查询（模型加载失败了）
+    if (state.pendingQuery) {
+      state.pendingQuery = null;
+      removeModelLoadingMessage();
+      showToast(`模型加载失败: ${status.error}`, 'error');
+    }
     container.classList.remove('hidden');
     if (modelEl) modelEl.textContent = status.model || 'Qwen3-0.6B';
     if (fillEl) {

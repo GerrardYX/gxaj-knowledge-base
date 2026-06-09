@@ -23,8 +23,8 @@ const pendingRequests = new Map(); // requestId -> { resolve, reject }
 function initWorker() {
   if (worker) return worker;
 
-  // 创建 Worker
-  worker = new Worker('js/embeddings.worker.js', { type: 'module' });
+  // 创建 Worker（经典模式，使用 importScripts 加载本地 transformers）
+  worker = new Worker('js/embeddings.worker.js');
 
   // 处理 Worker 消息
   worker.onmessage = (event) => {

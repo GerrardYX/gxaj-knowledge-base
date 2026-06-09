@@ -69,33 +69,54 @@ async function initModel() {
 
   modelLoading = true;
   modelError = null;
-  modelProgress = 5;
+  modelProgress = 2;
   modelMessage = '正在初始化推理引擎...';
   console.log('[Model] 正在初始化本地模型...');
   console.log(`[Model] 模型路径: ${MODEL_PATH}`);
 
   try {
+    // 每一步之间让出事件循环，确保 Express 能及时响应状态查询
+    modelProgress = 2;
+    modelMessage = '正在准备推理引擎...';
+    await yieldToEventLoop();
+
     // 动态导入 node-llama-cpp
+    modelProgress = 5;
+    modelMessage = '正在加载推理引擎模块...';
+    await yieldToEventLoop();
+
     const { getLlama, LlamaChatSession } = await import('node-llama-cpp');
 
     // 初始化 llama.cpp 运行时
-    modelProgress = 20;
+    modelProgress = 15;
     modelMessage = '正在配置推理运行时...';
+    await yieldToEventLoop();
     llama = await getLlama();
 
-    // 加载模型
-    modelProgress = 35;
-    modelMessage = '正在加载模型文件（首次可能需要几分钟）...';
+    // 加载模型（最耗时阶段，细粒度进度）
+    modelProgress = 25;
+    modelMessage = '正在加载模型文件（约 500MB，首次可能需要几分钟）...';
     console.log('[Model] 加载 GGUF 模型（首次可能需要几分钟）...');
+    await yieldToEventLoop();
+
+    // 报告加载过程中的中间进度（loadModel 本身没有进度回调，我们模拟递增）
+    const modelLoadProgress = setInterval(() => {
+      if (modelProgress < 65) {
+        modelProgress += 2;
+      }
+    }, 3000);
+
     chatModel = await llama.loadModel({
       modelPath: MODEL_PATH,
       // 对于 4GB RAM 机器，限制上下文长度
       contextSize: 512,  // 4GB RAM 友好
     });
+    clearInterval(modelLoadProgress);
 
     // 创建上下文
-    modelProgress = 75;
+    modelProgress = 70;
     modelMessage = '正在创建推理上下文...';
+    await yieldToEventLoop();
     const context = await chatModel.createContext();
     chatSession = new LlamaChatSession({
       contextSequence: context.getSequence()
@@ -115,6 +136,13 @@ async function initModel() {
     console.error('[Model] ❌ 模型加载失败:', err.message);
     console.error('[Model] 将降级到 NVIDIA API');
   }
+}
+
+/**
+ * 让出事件循环，使 Express 能处理挂起的请求
+ */
+function yieldToEventLoop() {
+  return new Promise(resolve => setImmediate(resolve));
 }
 
 // ─── API 路由 ────────────────────────────────────────────────────────────────
@@ -178,17 +206,17 @@ app.post('/api/chat', async (req, res) => {
       }
     }
 
-    // 策略2：降级到 NVIDIA API
-    if (modelLoading) {
-      return res.status(503).json({
-        error: '模型正在加载中，请稍候',
-        hint: '模型首次加载需要 1-2 分钟，请耐心等待'
-      });
+    // 模型未加载且未在加载中 → 自动触发按需加载
+    if (!modelLoading) {
+      console.log('[Proxy] 收到聊天请求，模型未加载，自动触发按需加载...');
+      initModel().catch(err => console.error('[Model] 按需加载失败:', err));
     }
 
     return res.status(503).json({
-      error: '本地模型未就绪',
-      hint: '请确保模型文件已正确安装，或检查 proxy.js 是否正常运行'
+      error: '模型正在加载中，请稍候',
+      hint: '模型首次加载需要约15-30秒，加载完成后请重新提问',
+      status: 'loading',
+      progress: modelProgress
     });
 
   } catch (err) {
@@ -212,7 +240,12 @@ app.post('/api/chat/stream', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
 
     if (!modelReady || !chatSession) {
-      res.write(`data: ${JSON.stringify({ error: '模型未就绪，请稍后再试' })}\n\n`);
+      // 未加载时自动触发按需加载
+      if (!modelLoading) {
+        console.log('[Proxy] 收到流式请求，模型未加载，自动触发按需加载...');
+        initModel().catch(err => console.error('[Model] 按需加载失败:', err));
+      }
+      res.write(`data: ${JSON.stringify({ error: '模型正在加载中，请稍候再试', status: 'loading', progress: modelProgress })}\n\n`);
       res.end();
       return;
     }
@@ -355,6 +388,24 @@ function messagesToPrompt(messages) {
   return prompt;
 }
 
+// ─── 手动触发模型加载 API ──────────────────────────────────────────────────
+app.post('/api/init-model', async (req, res) => {
+  // 如果模型已加载或正在加载，直接返回当前状态
+  if (modelReady) {
+    return res.json({ status: 'ready', progress: 100, message: '模型已就绪' });
+  }
+  if (modelLoading) {
+    return res.json({ status: 'loading', progress: modelProgress, message: modelMessage });
+  }
+
+  // 启动后台加载，立即返回 loading 状态
+  res.json({ status: 'loading', progress: 0, message: '开始加载模型...' });
+
+  initModel().catch(err => {
+    console.error('[Model] 模型初始化失败:', err);
+  });
+});
+
 // ─── 启动 ───────────────────────────────────────────────────────────────────
 (async () => {
   const port = await findAvailablePort(PORT);
@@ -366,12 +417,12 @@ function messagesToPrompt(messages) {
   ╠═══════════════════════════════════════════════════════╣
   ║  本地服务：http://localhost:${port}                    ║
   ║  模型: ${MODEL_NAME.padEnd(30)}   ║
+  ║  策略: 按需加载（首次提问时触发）                      ║
   ╚═══════════════════════════════════════════════════════╝
   `);
 
-    // 后台初始化模型
-    initModel().catch(err => {
-      console.error('[Model] 模型初始化失败:', err);
-    });
+    // 启动时不自动加载模型（按需加载，加快启动速度）
+    modelMessage = '服务就绪，模型待加载';
+    console.log('[Proxy] 服务就绪，等待首次提问时触发模型加载...');
   });
 })();

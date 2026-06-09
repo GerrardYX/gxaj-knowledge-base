@@ -38,11 +38,14 @@ async function loadModel() {
     try {
       self.postMessage({ type: 'progress', data: { status: 'loading', message: '正在加载向量模型...' } });
 
-      // 动态导入 transformers.js
-      const { pipeline: createPipeline } = await import(
+      // 动态导入 transformers.js（本地 ESM 版本，无需网络请求）
+      const { pipeline: createPipeline, env } = await import(
         /* webpackIgnore: true */
-        'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1/+esm'
+        './lib/transformers.esm.js'
       );
+
+      // 禁止远程加载模型文件（使用本地缓存）
+      env.allowRemoteModels = false;
 
       pipeline = await createPipeline('feature-extraction', CONFIG.modelName, {
         progress_callback: (progress) => {

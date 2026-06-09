@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   version: process.env.npm_package_version || '1.0.0',
   // 获取本地模型状态
   getModelStatus: () => ipcRenderer.invoke('get-model-status'),
+  // 按需初始化模型（首次提问时触发）
+  initModel: () => ipcRenderer.invoke('init-model'),
   // 重启模型（当加载失败时）
   restartModel: () => ipcRenderer.invoke('restart-model'),
   // 监听模型状态变更事件
