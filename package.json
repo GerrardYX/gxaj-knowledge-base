@@ -94,7 +94,7 @@
     "xmldom": "^0.6.0"
   },
   "devDependencies": {
-    "electron": "^28.3.3",
+    "electron": "^30.0.0",
     "electron-builder": "^24.13.3"
   }
 }
